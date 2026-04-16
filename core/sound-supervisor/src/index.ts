@@ -65,7 +65,7 @@ audioBlock.on('play', async (sink: any) => {
   try {
     await sdk.models.device.tags.set(process.env.BALENA_DEVICE_UUID!, 'metrics:play', '') // BALENA_DEVICE_UUID is always present in balenaOS
   } catch (error) {
-    console.log(error.message)
+    console.log((error as Error).message)
   }
 
 })

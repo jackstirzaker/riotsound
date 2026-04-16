@@ -1,4 +1,4 @@
-FROM balenalib/%%BALENA_MACHINE_NAME%%-debian:buster
+FROM balenalib/%%BALENA_MACHINE_NAME%%-debian:bookworm
 WORKDIR /usr/src
 
 ENV PULSE_SERVER=tcp:localhost:4317

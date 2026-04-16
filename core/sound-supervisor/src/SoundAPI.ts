@@ -1,9 +1,8 @@
 import * as path from 'path'
-import * as express from 'express'
-import { Application } from 'express'
+import express, { Application } from 'express'
 import SoundConfig from './SoundConfig'
 import BalenaAudio from 'balena-audio'
-import * as asyncHandler from 'express-async-handler'
+import asyncHandler from 'express-async-handler'
 import { constants } from './constants'
 import { restartDevice, rebootDevice, shutdownDevice } from './utils'
 import { getSdk, BalenaSDK } from 'balena-sdk'
@@ -51,15 +50,15 @@ export default class SoundAPI {
     })
 
     // Audio block
-    this.api.get('/audio', asyncHandler(async (_req, res) => res.json(await this.audioBlock.getInfo())))
-    this.api.get('/audio/volume', asyncHandler(async (_req, res) => res.json(await this.audioBlock.getVolume())))
-    this.api.post('/audio/volume', asyncHandler(async (req, res) => res.json(await this.audioBlock.setVolume(req.body.volume))))
-    this.api.get('/audio/sinks', asyncHandler(async (_req, res) => res.json(stringify(await this.audioBlock.getSinks()))))
+    this.api.get('/audio', asyncHandler(async (_req, res) => { res.json(await this.audioBlock.getInfo()) }))
+    this.api.get('/audio/volume', asyncHandler(async (_req, res) => { res.json(await this.audioBlock.getVolume()) }))
+    this.api.post('/audio/volume', asyncHandler(async (req, res) => { res.json(await this.audioBlock.setVolume(req.body.volume)) }))
+    this.api.get('/audio/sinks', asyncHandler(async (_req, res) => { res.json(stringify(await this.audioBlock.getSinks())) }))
 
     // Device management
-    this.api.post('/device/restart', asyncHandler(async (_req, res) => res.json(await restartDevice())))
-    this.api.post('/device/reboot', asyncHandler(async (_req, res) => res.json(await rebootDevice())))
-    this.api.post('/device/shutdown', asyncHandler(async (_req, res) => res.json(await shutdownDevice())))
+    this.api.post('/device/restart', asyncHandler(async (_req, res) => { res.json(await restartDevice()) }))
+    this.api.post('/device/reboot', asyncHandler(async (_req, res) => { res.json(await rebootDevice()) }))
+    this.api.post('/device/shutdown', asyncHandler(async (_req, res) => { res.json(await shutdownDevice()) }))
     this.api.post('/device/dtoverlay', asyncHandler(async (req, res) => {
       const { dtoverlay } = req.body
       try {

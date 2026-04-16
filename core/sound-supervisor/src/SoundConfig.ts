@@ -24,7 +24,7 @@ export default class SoundConfig {
     master: constants.multiroom.master ?? this.device.ip,
     forced: constants.multiroom.forced
   }
-  private audioBlock: BalenaAudio
+  private audioBlock!: BalenaAudio
 
   bindAudioBlock(audioBlock: BalenaAudio) {
     this.audioBlock = audioBlock
