@@ -11,8 +11,16 @@ while ! curl --silent --output /dev/null "$SOUND_SUPERVISOR/ping"; do sleep 5; e
 # snapserver: default to multiroom-server (local)
 MODE=$(curl --silent "$SOUND_SUPERVISOR/mode" || true)
 SNAPSERVER=$(curl --silent "$SOUND_SUPERVISOR/multiroom/master" || true)
+SUPERVISOR_DEVICE_IP=$(curl --silent "$SOUND_SUPERVISOR/device/ip" || true)
 if [[ -z "$SNAPSERVER" || "$SNAPSERVER" == "null" ]]; then
   SNAPSERVER=${SOUND_MULTIROOM_MASTER:-multiroom-server}
+fi
+
+# If the supervisor reports itself as the multiroom master, use the internal service name
+# so the local client connects over the Docker network instead of via host IP mapping.
+if [[ -n "$SUPERVISOR_DEVICE_IP" && "$SNAPSERVER" == "$SUPERVISOR_DEVICE_IP" ]]; then
+  echo "Detected local master IP $SNAPSERVER; switching snapserver host to multiroom-server"
+  SNAPSERVER=multiroom-server
 fi
 
 # --- ENV VARS ---
