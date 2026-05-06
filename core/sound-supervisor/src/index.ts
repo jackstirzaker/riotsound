@@ -14,20 +14,18 @@ const soundAPI: SoundAPI = new SoundAPI(config, audioBlock)
 
 let monitor: SnapserverMonitor
 let stopTimer: NodeJS.Timeout | null = null
+let fallbackTimer: NodeJS.Timeout | null = null
+let inMultiroomFallback = false
 const STOP_DEMOTION_MS = 30_000
+const MULTIROOM_FALLBACK_MS = 20_000
 
 init()
 async function init() {
   await soundAPI.listen(constants.port)
-  console.log('Giving the audio block 10 seconds to initialize PulseAudio...')
-  await timeout(10000)
-  await audioBlock.listen()
-  await audioBlock.setVolume(constants.volume)
 
-  // Ensure balena service state matches the configured role on every startup.
-  // balenaOS persists stopped-via-API state across reboots, so we must
-  // explicitly start/stop services to recover from any prior crash or partial
-  // role switch.
+  // Register play/stop handlers and start monitor before waiting for Pulse.
+  // WirePlumber fires /internal/play as soon as audio starts — handlers must
+  // be wired before that can happen, regardless of how long Pulse takes to init.
   config.applyCurrentRole()
 
   // HOST is always master — elect immediately.
@@ -54,6 +52,10 @@ async function init() {
   })
   soundAPI.setMonitor(monitor)
   monitor.start()
+
+  // Connect to PulseAudio in the background. PulseWrapper retries indefinitely,
+  // so startup is never blocked by a slow audio container.
+  audioBlock.listen().then(() => audioBlock.setVolume(constants.volume)).catch(() => {})
 }
 
 // WirePlumber Lua fires POST /internal/play when a stream links to balena-sound.input.
@@ -86,6 +88,22 @@ export async function handlePlayDetect(): Promise<void> {
   console.log('[play-detect] AUTO device — optimistically promoting to master')
   config.applyElectionResult('master')
   monitor.setMaster(true)
+
+  // Start a fallback timer. If no snapclient connects within MULTIROOM_FALLBACK_MS,
+  // bypass Snapcast and route input directly to output so audio is never silent.
+  if (fallbackTimer) clearTimeout(fallbackTimer)
+  fallbackTimer = setTimeout(async () => {
+    fallbackTimer = null
+    if (!config.isElectedMaster() || inMultiroomFallback) return
+    const hasClients = await snapserverHasClients()
+    if (!hasClients) {
+      console.log(`[multiroom-fallback] No snapclient after ${MULTIROOM_FALLBACK_MS / 1000}s — bypassing Snapcast`)
+      inMultiroomFallback = true
+      audioBlock.rerouteInputDirect().catch(err =>
+        console.log(`[multiroom-fallback] reroute error: ${(err as Error).message}`)
+      )
+    }
+  }, MULTIROOM_FALLBACK_MS)
 }
 
 // Called by SoundAPI when /internal/stop fires.
@@ -94,16 +112,36 @@ export function handleStopDetect(): void {
   if (!monitor) return
   if (config.role !== MultiroomRole.AUTO || !config.isElectedMaster()) return
 
+  if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null }
   if (stopTimer) clearTimeout(stopTimer)
   console.log(`[stop-detect] Stream stopped — demoting in ${STOP_DEMOTION_MS / 1000}s if no replay`)
-  stopTimer = setTimeout(() => {
+  stopTimer = setTimeout(async () => {
     stopTimer = null
+    if (inMultiroomFallback) {
+      inMultiroomFallback = false
+      await audioBlock.restoreSnapcastRouting().catch(err =>
+        console.log(`[multiroom-fallback] restore error: ${(err as Error).message}`)
+      )
+    }
     console.log('[stop-detect] No replay — demoting to idle')
     config.demoteToIdle()
     monitor.setMaster(false)
   }, STOP_DEMOTION_MS)
 }
 
-async function timeout(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
+async function snapserverHasClients(): Promise<boolean> {
+  try {
+    const res = await fetch('http://localhost:1780/jsonrpc', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'Server.GetStatus' }),
+      signal: AbortSignal.timeout(3000),
+    })
+    const data = await res.json() as any
+    const groups: any[] = data?.result?.server?.groups ?? []
+    return groups.some((g: any) => (g.clients ?? []).some((c: any) => c.connected))
+  } catch {
+    return false
+  }
 }
+

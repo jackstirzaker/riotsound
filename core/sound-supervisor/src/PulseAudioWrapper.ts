@@ -17,7 +17,6 @@ import { promisify } from 'util'
 const execAsync = (cmd: string) => promisify(exec)(cmd, { timeout: 5000 })
 
 const RECONNECT_DELAY_MS = 3000
-const MAX_RETRIES = 20
 const POLL_INTERVAL_MS = 1000
 
 export interface AudioBlockSink {
@@ -84,14 +83,8 @@ export class PulseAudioWrapper extends EventEmitter {
         this._startPollMonitor()
       } catch {
         this.retryCount++
-        if (this.retryCount <= MAX_RETRIES) {
-          console.log(`[PulseAudioWrapper] pactl check failed, retrying... (${this.retryCount}/${MAX_RETRIES})`)
-        } else {
-          console.error(`[PulseAudioWrapper] Max retries exceeded. Giving up.`)
-          if (this._connectInterval) {
-            clearInterval(this._connectInterval)
-            this._connectInterval = null
-          }
+        if (this.retryCount <= 20 || this.retryCount % 10 === 0) {
+          console.log(`[PulseAudioWrapper] pactl check failed, retrying... (attempt ${this.retryCount})`)
         }
       }
     }, RECONNECT_DELAY_MS)
@@ -308,6 +301,74 @@ export class PulseAudioWrapper extends EventEmitter {
       console.warn(`[PulseAudioWrapper] getSinkInputIndexBySource failed: ${(err as Error).message}`)
       return null
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // Module management (used for Snapcast fallback routing)
+  // -------------------------------------------------------------------------
+
+  async listModulesShort(): Promise<Array<{ index: number; name: string; args: string }>> {
+    try {
+      const { stdout } = await execAsync(`pactl --server ${this.server} list short modules`)
+      return stdout.trim().split('\n').filter(Boolean).map(line => {
+        const parts = line.split('\t')
+        return { index: parseInt(parts[0], 10), name: parts[1] || '', args: parts.slice(2).join('\t') }
+      })
+    } catch {
+      return []
+    }
+  }
+
+  private async _loadModule(name: string, args: string): Promise<number | null> {
+    try {
+      const { stdout } = await execAsync(`pactl --server ${this.server} load-module ${name} ${args}`)
+      const idx = parseInt(stdout.trim(), 10)
+      return isNaN(idx) ? null : idx
+    } catch (err) {
+      console.warn(`[PulseAudioWrapper] load-module ${name} failed: ${(err as Error).message}`)
+      return null
+    }
+  }
+
+  private async _unloadModule(index: number): Promise<void> {
+    try {
+      await execAsync(`pactl --server ${this.server} unload-module ${index}`)
+    } catch (err) {
+      console.warn(`[PulseAudioWrapper] unload-module ${index} failed: ${(err as Error).message}`)
+    }
+  }
+
+  private _fallbackModuleIdx: number | null = null
+
+  async rerouteInputDirect(): Promise<void> {
+    const modules = await this.listModulesShort()
+    const snapcastLoopback = modules.find(m =>
+      m.name === 'module-loopback' &&
+      m.args.includes('source=balena-sound.input.monitor') &&
+      m.args.includes('sink=snapcast')
+    )
+    if (snapcastLoopback) {
+      await this._unloadModule(snapcastLoopback.index)
+      console.log(`[PulseAudioWrapper] Unloaded input→snapcast loopback (module ${snapcastLoopback.index})`)
+    }
+    this._fallbackModuleIdx = await this._loadModule(
+      'module-loopback',
+      'source=balena-sound.input.monitor sink=balena-sound.output latency_msec=100'
+    )
+    console.log('[PulseAudioWrapper] Rerouted: balena-sound.input → balena-sound.output (Snapcast bypassed)')
+  }
+
+  async restoreSnapcastRouting(): Promise<void> {
+    if (this._fallbackModuleIdx !== null) {
+      await this._unloadModule(this._fallbackModuleIdx)
+      this._fallbackModuleIdx = null
+      console.log('[PulseAudioWrapper] Unloaded direct fallback loopback')
+    }
+    await this._loadModule(
+      'module-loopback',
+      'source=balena-sound.input.monitor sink=snapcast latency_msec=100'
+    )
+    console.log('[PulseAudioWrapper] Restored: balena-sound.input → snapcast')
   }
 
   async moveSinkInputByName(sinkInputSourceName: string, targetSinkName: string): Promise<void> {

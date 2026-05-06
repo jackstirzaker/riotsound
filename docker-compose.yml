@@ -33,14 +33,12 @@ services:
   multiroom-server:
     build: ./core/multiroom/server
     restart: on-failure
-    ports:
-      - 1704:1704
-      - 1705:1705
-      - 1780:1780
+    network_mode: host
 
   multiroom-client:
     build: ./core/multiroom/client
     restart: on-failure
+    network_mode: host
 
   wifi-watchdog:
     build:

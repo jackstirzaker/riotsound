@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     build-essential \
     cmake \
+    pkg-config \
     libboost-dev \
     libexpat1-dev \
     libasound2-dev \
@@ -26,6 +27,7 @@ RUN git clone --depth 1 --branch "v${SNAPCAST_VERSION}" \
 WORKDIR /snapcast
 RUN cmake -B build \
       -DCMAKE_BUILD_TYPE=Release \
+      -DBUILD_WITH_PULSE=ON \
       -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=/snapcast/bin && \
     cmake --build build -j$(nproc) --target snapclient
 

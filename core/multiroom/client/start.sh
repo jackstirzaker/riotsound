@@ -2,10 +2,9 @@
 set -e
 
 SOUND_SUPERVISOR_PORT=${SOUND_SUPERVISOR_PORT:-80}
-GW="$(ip route | awk '/default / { print $3 }')"
-SOUND_SUPERVISOR="$GW:$SOUND_SUPERVISOR_PORT"
-# audio container uses network_mode:host; override PULSE_SERVER to reach it via gateway IP
-export PULSE_SERVER="tcp:$GW:4317"
+SOUND_SUPERVISOR="localhost:$SOUND_SUPERVISOR_PORT"
+# host networking: audio and sound-supervisor share the host network stack
+export PULSE_SERVER="tcp:localhost:4317"
 # Wait for sound supervisor to start
 while ! curl --silent --output /dev/null "$SOUND_SUPERVISOR/ping"; do sleep 5; echo "Waiting for sound supervisor to start at $SOUND_SUPERVISOR"; done
 
@@ -23,9 +22,9 @@ LATENCY=${SOUND_MULTIROOM_LATENCY:+"--latency $SOUND_MULTIROOM_LATENCY"}
 # Log only on first wait and every 30s after to keep logs readable.
 _pa_waited=0
 _pa_log_interval=30
-until PULSE_SERVER="tcp:${GW}:4317" pactl info >/dev/null 2>&1; do
+until PULSE_SERVER="tcp:localhost:4317" pactl info >/dev/null 2>&1; do
   if [ $_pa_waited -eq 0 ] || [ $(( _pa_waited % _pa_log_interval )) -eq 0 ]; then
-    echo "[snapclient] Waiting for PulseAudio at tcp:${GW}:4317... (${_pa_waited}s)"
+    echo "[snapclient] Waiting for PulseAudio at tcp:localhost:4317... (${_pa_waited}s)"
   fi
   sleep 5
   _pa_waited=$(( _pa_waited + 5 ))
@@ -37,13 +36,20 @@ echo "[snapclient] PulseAudio ready (waited ${_pa_waited}s)"
 # master advertised by another device.
 # JOIN/HOST: use the same readiness check so JOIN waits for discovery instead
 # of falling back to its own IP.
+CLIENT_READY_TIMEOUT=${SOUND_MULTIROOM_CLIENT_TIMEOUT:-60}
 ROLE=$(curl -sf "$SOUND_SUPERVISOR/multiroom" 2>/dev/null | grep -o '"role":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
 if [[ "$ROLE" == "auto" || "$ROLE" == "join" || "$ROLE" == "host" ]]; then
-  echo "[snapclient] $ROLE role — waiting for snapcast target..."
+  echo "[snapclient] $ROLE role — waiting for snapcast target (timeout: ${CLIENT_READY_TIMEOUT}s)..."
+  _waited=0
   until curl -sf "$SOUND_SUPERVISOR/multiroom/client-ready" 2>/dev/null | grep -q '"active":true'; do
-    sleep 0.5
+    if [ "$_waited" -ge "$CLIENT_READY_TIMEOUT" ]; then
+      echo "[snapclient] ERROR: no snapcast target after ${CLIENT_READY_TIMEOUT}s — exiting for restart"
+      exit 1
+    fi
+    sleep 1
+    _waited=$((_waited + 1))
   done
-  echo "[snapclient] Snapcast target ready"
+  echo "[snapclient] Snapcast target ready (waited ${_waited}s)"
 fi
 
 # Fetch master IP after election completes (supervisor election runs in parallel with audio init).
@@ -69,7 +75,7 @@ fi
 # This bypasses ALSA entirely and connects directly to pipewire-pulse.
 # PULSE_SINK=balena-sound.output (set in Dockerfile) routes output to the right PipeWire sink.
 if [[ "$MODE" == "MULTI_ROOM" || "$MODE" == "MULTI_ROOM_CLIENT" ]]; then
-  PULSE_SERVER="tcp:${GW}:4317" \
+  PULSE_SERVER="tcp:localhost:4317" \
   PULSE_LATENCY_MSEC=200 \
   /usr/bin/snapclient \
     --player pulse \
