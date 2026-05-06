@@ -7,17 +7,22 @@ apply_hostname() {
   # SOUND_DEVICE_NAME is injected automatically by balena from fleet/device variables.
   TARGET_HOSTNAME="${SOUND_DEVICE_NAME:-iotsound}"
 
-  # Read the host OS hostname from the supervisor API — `hostname` returns the
-  # container's hostname (a UUID fragment), not the host-level hostname.
+  # `hostname` returns the container's own short ID, not the host OS hostname.
+  # Read the applied value from the supervisor host-config API instead.
   CURRENT_HOSTNAME=$(curl -sf \
     "$BALENA_SUPERVISOR_ADDRESS/v1/device/host-config?apikey=$BALENA_SUPERVISOR_API_KEY" \
-    | grep -o '"hostname":"[^"]*"' | cut -d'"' -f4 || echo "")
+    | grep -o '"hostname":"[^"]*"' | cut -d'"' -f4 || true)
+
+  if [ -z "$CURRENT_HOSTNAME" ]; then
+    echo "[hostname] Could not read current hostname from supervisor — skipping"
+    return 0
+  fi
 
   echo "[hostname] Current hostname: $CURRENT_HOSTNAME"
   echo "[hostname] Target hostname: $TARGET_HOSTNAME"
 
   if [ "$CURRENT_HOSTNAME" = "$TARGET_HOSTNAME" ]; then
-    echo "[hostname] Hostname already matches target. Skipping update."
+    echo "[hostname] Already set. Skipping."
     return 0
   fi
 
