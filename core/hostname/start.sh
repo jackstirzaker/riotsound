@@ -6,7 +6,12 @@ INTERVAL="${HOSTNAME_SYNC_INTERVAL:-60}"
 apply_hostname() {
   # SOUND_DEVICE_NAME is injected automatically by balena from fleet/device variables.
   TARGET_HOSTNAME="${SOUND_DEVICE_NAME:-iotsound}"
-  CURRENT_HOSTNAME=$(hostname)
+
+  # Read the host OS hostname from the supervisor API — `hostname` returns the
+  # container's hostname (a UUID fragment), not the host-level hostname.
+  CURRENT_HOSTNAME=$(curl -sf \
+    "$BALENA_SUPERVISOR_ADDRESS/v1/device/host-config?apikey=$BALENA_SUPERVISOR_API_KEY" \
+    | grep -o '"hostname":"[^"]*"' | cut -d'"' -f4 || echo "")
 
   echo "[hostname] Current hostname: $CURRENT_HOSTNAME"
   echo "[hostname] Target hostname: $TARGET_HOSTNAME"
