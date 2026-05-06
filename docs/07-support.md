@@ -144,6 +144,55 @@ For the onboard 3.5mm headphone jack, set these values on the specific Pi 3 devi
 
 The important detail is `noaudio` on the `vc4-kms-v3d` overlay. Do not use `vc4-kms-v3d,audio=off`; on recent 64-bit balenaOS and Supervisor releases that value can make the device repeatedly apply host configuration. Do not rely on manual edits to `/mnt/boot/config.txt` either, because Supervisor rewrites that file from balenaCloud-managed configuration.
 
+## Enabling debug mode
+
+Setting `LOG_LEVEL=debug` on a device (or fleet) is the universal debug switch. It enables verbose logging across all IoTSound services simultaneously:
+
+| Service | Effect |
+|---|---|
+| `sound-supervisor` | Play/stop/election events logged in detail |
+| `audio` | PulseAudio log level raised to debug |
+| `librespot` | Spotify client logs at debug verbosity |
+| `multiroom-client` | Periodic waiting heartbeat logged every 5 minutes |
+| `support-toolkit` | Debug toolkit container stays running |
+
+### Setting the variable
+
+To enable on a single device via balena CLI:
+```bash
+balena env set LOG_LEVEL debug --device <uuid>
+```
+
+To enable fleet-wide:
+```bash
+balena env set LOG_LEVEL debug --fleet <fleet-slug>
+```
+
+To disable (reverts all services to normal verbosity):
+```bash
+balena env rm LOG_LEVEL --device <uuid>
+```
+
+### Using the debug toolkit
+
+IoTSound ships a `support-toolkit` container that stays dormant (exits immediately) unless `LOG_LEVEL=debug` is set. When active, you can shell into it for live network diagnostics:
+
+```bash
+balena ssh <uuid> -s support-toolkit
+```
+
+Inside you have access to standard network tools: `tcpdump`, `curl`, `dig`, `nslookup`, `netstat`, and others. This is useful for diagnosing mDNS/multiroom discovery issues — for example:
+
+```bash
+# Watch mDNS traffic on the LAN interface
+tcpdump -n -i wlan0 udp port 5353
+
+# Check if snapserver is reachable
+curl -s http://localhost:1780/jsonrpc -d '{"id":1,"jsonrpc":"2.0","method":"Server.GetStatus"}'
+```
+
+The container exits automatically when `LOG_LEVEL` is removed or set to any value other than `debug`.
+
 ## Contact us
 
 If you have any questions regarding IoTSound, whether it's an issue not listed in the troubleshooting section, a request for a new feature or DAC, or simply if you want to discuss about the project, feel free to open an [issue](https://github.com/iotsound/iotsound/issues/new) on our GitHub repository. Thanks for trying out IoTSound!
