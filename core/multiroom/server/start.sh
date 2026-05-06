@@ -56,7 +56,7 @@ stream = pipe:///tmp/snapserver-audio?name=balenaSound&sampleformat=48000:16:2&c
 sampleformat = 48000:16:2
 
 [logging]
-filter = *:error
+filter = *:error,ControlSessionHTTP:fatal
 SNAPEOF
 
   FIFO=/tmp/snapserver-audio
