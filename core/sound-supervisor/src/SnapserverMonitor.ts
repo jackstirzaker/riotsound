@@ -211,7 +211,7 @@ export default class SnapserverMonitor {
       role: 'host',
       version: '2.0',
       master_uuid: this.deviceUuid,
-    }, this.localIp)
+    })
   }
 
   private async fetchServerStatus(): Promise<any> {
