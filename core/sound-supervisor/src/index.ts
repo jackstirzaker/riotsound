@@ -96,8 +96,9 @@ export async function handlePlayDetect(): Promise<void> {
     fallbackTimer = null
     if (!config.isElectedMaster() || inMultiroomFallback) return
     const hasClients = await snapserverHasClients()
+    console.log(`[multiroom-fallback] T+${MULTIROOM_FALLBACK_MS / 1000}s check — hasClients: ${hasClients}`)
     if (!hasClients) {
-      console.log(`[multiroom-fallback] No snapclient after ${MULTIROOM_FALLBACK_MS / 1000}s — bypassing Snapcast`)
+      console.log(`[multiroom-fallback] No snapclient — bypassing Snapcast`)
       inMultiroomFallback = true
       audioBlock.rerouteInputDirect().catch(err =>
         console.log(`[multiroom-fallback] reroute error: ${(err as Error).message}`)

@@ -81,6 +81,9 @@ if [[ "$MODE" == "MULTI_ROOM" || "$MODE" == "MULTI_ROOM_CLIENT" ]]; then
     $LATENCY \
     --hostID $SNAPCAST_CLIENT_ID \
     --logfilter *:error
+  RC=$?
+  echo "[snapclient] exited with code $RC"
+  exit $RC
 else
   echo "Multi-room client disabled. Exiting..."
   exit 0
