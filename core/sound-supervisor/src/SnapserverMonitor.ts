@@ -46,7 +46,7 @@ export default class SnapserverMonitor {
   private readonly deviceUuid: string
   private readonly groupLatency: number
   private readonly hwLatency: number
-  private readonly localIp: string
+  private readonly localIp: string | undefined
   private readonly multiroomMaster: string | undefined
   private isMaster: boolean
 
@@ -58,7 +58,7 @@ export default class SnapserverMonitor {
     this.deviceUuid = cfg.deviceUuid
     this.groupLatency = cfg.groupLatency
     this.hwLatency = cfg.hwLatency
-    this.localIp = cfg.localIp
+    this.localIp = cfg.localIp === 'localhost' ? undefined : cfg.localIp
     this.multiroomMaster = cfg.multiroomMaster
     this.isMaster = cfg.isMaster
   }
@@ -84,7 +84,7 @@ export default class SnapserverMonitor {
 
   // Returns master IP: env override → mDNS discovered → own IP fallback.
   getMasterIp(): string {
-    return this.multiroomMaster ?? this.discoveredMasterIp ?? this.localIp
+    return this.multiroomMaster ?? this.discoveredMasterIp ?? this.localIp ?? 'localhost'
   }
 
   // Returns only a usable remote/explicit master for client join decisions.
@@ -191,7 +191,7 @@ export default class SnapserverMonitor {
     if (this.discovering) return
     this.discovering = true
     try {
-      const services = await browseSnapcast(this.groupName)
+      const services = await browseSnapcast(this.groupName, 8000, this.localIp)
       const newIp = services[0]?.ip ?? null
       if (newIp !== this.discoveredMasterIp) {
         console.log(`[snapserver-monitor] Master IP: ${this.discoveredMasterIp ?? '(none)'} → ${newIp ?? '(none)'}`)
@@ -211,7 +211,7 @@ export default class SnapserverMonitor {
       role: 'host',
       version: '2.0',
       master_uuid: this.deviceUuid,
-    })
+    }, this.localIp)
   }
 
   private async fetchServerStatus(): Promise<any> {

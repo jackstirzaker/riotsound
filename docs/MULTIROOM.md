@@ -147,6 +147,11 @@ SOUND_MULTIROOM_LATENCY = 100   # milliseconds, added on top of group latency
 
 ## Troubleshooting
 
+**Karaoke or Spotify appears to play but no speakers output**
+- Check `sound-supervisor` first. If logs show `PulseAudioWrapper pactl check failed ... (20/20)` and then no successful connection, supervisor may have started before PulseAudio was ready and failed before wiring play handlers. `/internal/play` can return `{"received":true}` while `/multiroom/active` stays false. Fix/verify `core/sound-supervisor/src/index.ts` and `PulseAudioWrapper.ts` so Pulse connects in the background and retries indefinitely.
+- Check `multiroom-client` logs. If snapclient exits with `Exception: No audio player support for: pulse` or `PCM device "default" not found`, the Snapcast client image does not support the configured PulseAudio player/output. Rebuild/fix the client image before debugging routing further.
+- Check networking. The Snapcast master IP advertised by mDNS must be reachable from the `multiroom-client` container. If the client is isolated on its own Docker network, it may discover an address that the container cannot route to. Use host networking or a deliberate bridge/port design so clients can reach TCP `1704` on the advertised master.
+
 **Devices don't sync after streaming starts**
 - Wait up to 10 seconds — mDNS discovery can take a moment on first connection
 - Confirm `SOUND_GROUP_NAME` is the same on all devices you expect to sync

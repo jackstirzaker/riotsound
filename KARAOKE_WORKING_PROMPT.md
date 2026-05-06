@@ -43,6 +43,7 @@ Project identity:
 - Fork: `JaragonCR/iotsound`, not upstream `iotsound/iotsound`.
 - Fleet: `g_jorge_aragon/sound`.
 - Test device: `554b996` / `wispy-road`, Raspberry Pi 4, `raspberrypi4-64`, IP noted in memory.
+- Second test device: `a1d8943` / `pretty-apple`, Raspberry Pi 3, `raspberrypi3-64`, IP `172.28.10.185`, onboard 3.5mm output, no HAT, no USB output.
 - Deploy command: `/home/jaragon/balena/balena/bin/balena push g_jorge_aragon/sound` from repo root. The system `balena` binary is not the right one.
 - PRs target `master` in JaragonCR's fork. Use PR flow; do not direct-push master.
 
@@ -96,6 +97,7 @@ Karaoke branch architecture:
   - Mic loopback applies only to local speaker mode. Karaoke loads `module-loopback source=<mic> sink=balena-sound.input latency_msec=50 remix=true` and unloads karaoke-owned mic loopbacks outside local mode.
   - Karaoke must behave like a source/plugin on top of the stack. It must not change `AUDIO_OUTPUT`, selected hardware output, base volume routing, or multiroom role.
   - On device `554b996`, `AUDIO_OUTPUT` stays `AUTO`. Do not change it unless the user explicitly asks.
+  - Standing rule from user: leave `AUDIO_OUTPUT=AUTO`. Do not force USB/HAT/HDMI/3.5mm in env as a workaround; fix auto-selection/routing instead.
   - Karaoke mic loopback is active only while a karaoke song is actively playing in local speaker mode. Local mode selection by itself must not keep a mic loopback loaded while idle.
   - Mic gain is 0-100 via `/api/mic-gain`, persisted in karaoke config, and seeded by `KARAOKE_MIC_GAIN` or `AUDIO_MIC_INPUT_VOLUME`.
 
@@ -152,6 +154,13 @@ Commit and PR discipline:
 
 Current known risks/open items:
 
+- 2026-05-05 active handoff: user rolled hardware back to an older stable release after the new release exposed multiroom/hostname regressions. After patching, deploy with `/home/jaragon/balena/balena/bin/balena push g_jorge_aragon/sound`.
+- 2026-05-05 balena deployment note: release `4047175` was created successfully but devices initially stayed on old release because balena delta server returned `503` for `karaoke` and `hostname` image deltas. Setting fleet config `BALENA_SUPERVISOR_DELTA=0` made devices use normal Docker image pulls and apply the release. Keep this set unless there is a reason to re-enable deltas.
+- 2026-05-05 critical bug: `sound-supervisor` startup can block on `await audioBlock.listen()` before registering `/internal/play` handlers and creating `SnapserverMonitor`. If PulseAudio is late or the wrapper gives up, `/internal/play` returns `{"received":true}` but AUTO promotion does nothing and `/multiroom/active` remains false. Patch `core/sound-supervisor/src/index.ts` so API handlers, `applyCurrentRole()`, and monitor setup happen before PulseAudio readiness; connect to Pulse in the background. Patch `PulseAudioWrapper.ts` so reconnect attempts do not stop after 20 tries.
+- 2026-05-05 critical bug: `multiroom-client` cannot play because the Snapcast client image was built without PulseAudio player support. Logs show `PCM device "default" not found` followed by `Fatal Exception: No audio player support for: pulse`. Fix the Snapcast client build/package flags/deps so `snapclient` supports `--player pulse`, or switch client playback to a supported path that reaches `balena-sound.output`. Verify with `snapclient --help` or equivalent inside the container before deploy.
+- 2026-05-05 multiroom networking bug: advertised Snapcast server IP can be unreachable from `multiroom-client` when the client container is on its own network. Need either host networking for multiroom server/client or an explicit bridge/network design where server port `1704` and Pulse route are reachable between containers/devices. User called this out as a root cause of client failing to reach the advertised server.
+- 2026-05-05 hostname regression: `core/hostname` looping every minute caused a host-config update loop. The user manually stopped it. Hostname should persist an "applied" marker or compare desired env against actual hostname/last applied state and only PATCH supervisor host-config when the desired value changes. Do not keep writing host config every minute.
+- 2026-05-05 hardware observation: Pi4 audio startup selected `alsa_output.platform-soc_sound.stereo-fallback` with `AUDIO_OUTPUT=AUTO`; Pi3 uses `alsa_output.platform-3f00b840.mailbox.stereo-fallback`. Keep auto selection intact.
 - Runtime config persists in karaoke SQLite on `/data/app`; Balena env vars seed defaults, but the UI does not write back to Balena device variables.
 - Mic loopback is now implemented for local speaker mode, but should be tested with real microphones after any audio-stack change.
 - Karaoke must release source ownership when idle so librespot/AirPlay/Bluetooth can use `balena-sound.input` without karaoke holding play detection or adding multiroom delay.
@@ -168,7 +177,8 @@ Latest known done state:
 - Local speaker A/V sync page exists at `/sync`; Audience View shows `Sync timing` only in local mode.
 - Audience View shows `Mic Gain` only in local mode.
 - Local mode enables mic loopback into `balena-sound.input`; stream mode disables it.
-- Latest sprint releases were deployed to device `554b996` on 2026-05-04 and verified operational through karaoke and multiroom endpoints.
+- 2026-05-05 release `4047175` verified: both Pis ran the new karaoke API and `/api/volume` returned synced object shape `{"percent":N,"volume":N}` on both singer/audience paths. User later rolled hardware back to an older stable release because multiroom client and hostname regressions broke audio.
+- 2026-05-05 autonomous test: queued cached `Sublime - Santeria (Karaoke Version)` on Pi3; karaoke showed `state:"playing"` and logs showed `[player] speakers on`, but no reliable audio/multiroom because sound-supervisor/multiroom-client bugs above blocked promotion/client playback.
 
 When given a task:
 

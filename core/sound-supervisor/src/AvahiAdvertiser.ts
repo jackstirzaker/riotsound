@@ -5,10 +5,10 @@ export default class AvahiAdvertiser {
   private bonjour: Bonjour | null = null
   private service: Service | null = null
 
-  advertise(name: string, port: number, txt: Record<string, string>): void {
+  advertise(name: string, port: number, txt: Record<string, string>, localIp?: string): void {
     this.unpublish()
     console.log(`[mdns-advert] Advertising "${name}" _snapcast._tcp port=${port}`)
-    this.bonjour = new Bonjour()
+    this.bonjour = new Bonjour(localIp ? { interface: localIp } as any : undefined)
     this.service = this.bonjour.publish({ name, type: 'snapcast', port, txt })
   }
 
