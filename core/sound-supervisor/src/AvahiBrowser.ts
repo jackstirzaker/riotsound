@@ -8,9 +8,9 @@ export interface SnapcastService {
   txt: Record<string, string>
 }
 
-export function browseSnapcast(groupName?: string, timeoutMs = 8000, localIp?: string): Promise<SnapcastService[]> {
+export function browseSnapcast(groupName?: string, timeoutMs = 8000, _localIp?: string): Promise<SnapcastService[]> {
   return new Promise((resolve) => {
-    const bonjour = new Bonjour(localIp ? { interface: localIp } as any : undefined)
+    const bonjour = new Bonjour()
     const found: SnapcastService[] = []
 
     const browser = bonjour.find({ type: 'snapcast' }, (service: Service) => {
