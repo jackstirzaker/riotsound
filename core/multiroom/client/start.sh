@@ -36,15 +36,13 @@ echo "[snapclient] PulseAudio ready (waited ${_pa_waited}s)"
 # master advertised by another device.
 # JOIN/HOST: use the same readiness check so JOIN waits for discovery instead
 # of falling back to its own IP.
-CLIENT_READY_TIMEOUT=${SOUND_MULTIROOM_CLIENT_TIMEOUT:-60}
 ROLE=$(curl -sf "$SOUND_SUPERVISOR/multiroom" 2>/dev/null | grep -o '"role":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
 if [[ "$ROLE" == "auto" || "$ROLE" == "join" || "$ROLE" == "host" ]]; then
-  echo "[snapclient] $ROLE role — waiting for snapcast target (timeout: ${CLIENT_READY_TIMEOUT}s)..."
+  echo "[snapclient] $ROLE role — waiting for snapcast target..."
   _waited=0
   until curl -sf "$SOUND_SUPERVISOR/multiroom/client-ready" 2>/dev/null | grep -q '"active":true'; do
-    if [ "$_waited" -ge "$CLIENT_READY_TIMEOUT" ]; then
-      echo "[snapclient] ERROR: no snapcast target after ${CLIENT_READY_TIMEOUT}s — exiting for restart"
-      exit 1
+    if (( _waited % 30 == 0 )); then
+      echo "[snapclient] Still waiting for snapcast target... (${_waited}s)"
     fi
     sleep 1
     _waited=$((_waited + 1))
