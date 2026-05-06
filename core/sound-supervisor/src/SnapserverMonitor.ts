@@ -114,11 +114,14 @@ export default class SnapserverMonitor {
   start(): void {
     // Poll snapserver HTTP API only if this device is the elected master.
     // Client devices run discovery only so they can find the master IP.
+    // Masters never browse: two Bonjour instances bound to 0.0.0.0:5353 on
+    // the same host interfere and prevent the advertiser from receiving queries.
     if (this.isMaster) {
       this.pollInterval = setInterval(() => this.poll(), POLL_INTERVAL_MS)
+    } else {
+      this.discoveryInterval = setInterval(() => this.discover(), DISCOVERY_INTERVAL_MS)
+      this.discover().catch(() => {})
     }
-    this.discoveryInterval = setInterval(() => this.discover(), DISCOVERY_INTERVAL_MS)
-    this.discover().catch(() => {})
   }
 
   stop(): void {
@@ -132,13 +135,25 @@ export default class SnapserverMonitor {
     if (this.isMaster === isMaster) return
     this.isMaster = isMaster
     console.log(`[snapserver-monitor] Role transition → ${isMaster ? 'master' : 'client'}`)
-    if (isMaster && !this.pollInterval) {
-      this.pollInterval = setInterval(() => this.poll(), POLL_INTERVAL_MS)
-    } else if (!isMaster && this.pollInterval) {
-      clearInterval(this.pollInterval)
-      this.pollInterval = null
-      this.advertiser.unpublish()
-      this.serverWasUp = false
+    if (isMaster) {
+      // Stop browsing — masters advertise, they don't need to discover.
+      // Two Bonjour instances on 0.0.0.0:5353 interfere; only the advertiser runs.
+      if (this.discoveryInterval) { clearInterval(this.discoveryInterval); this.discoveryInterval = null }
+      if (!this.pollInterval) {
+        this.pollInterval = setInterval(() => this.poll(), POLL_INTERVAL_MS)
+      }
+    } else {
+      if (this.pollInterval) {
+        clearInterval(this.pollInterval)
+        this.pollInterval = null
+        this.advertiser.unpublish()
+        this.serverWasUp = false
+      }
+      // Start browsing to find the new master.
+      if (!this.discoveryInterval) {
+        this.discoveryInterval = setInterval(() => this.discover(), DISCOVERY_INTERVAL_MS)
+        this.discover().catch(() => {})
+      }
     }
   }
 
