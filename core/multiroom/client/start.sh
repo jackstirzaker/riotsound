@@ -41,7 +41,7 @@ if [[ "$ROLE" == "auto" || "$ROLE" == "join" || "$ROLE" == "host" ]]; then
   echo "[snapclient] $ROLE role — waiting for snapcast target..."
   _waited=0
   until curl -sf "$SOUND_SUPERVISOR/multiroom/client-ready" 2>/dev/null | grep -q '"active":true'; do
-    if [[ -n "$SOUND_SUPERVISOR_DEBUG" ]] && (( _waited % 300 == 0 )); then
+    if [[ "$LOG_LEVEL" == "debug" ]] && (( _waited % 300 == 0 )); then
       echo "[snapclient] Still waiting for snapcast target... (${_waited}s)"
     fi
     sleep 1
