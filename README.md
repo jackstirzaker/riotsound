@@ -55,10 +55,13 @@
 
 | Device | Status |
 |---|---|
-| Raspberry Pi 4 + HiFiBerry DAC+ | ✅ Tested and working |
+| Raspberry Pi 4 + HiFiBerry DAC HAT | ✅ Tested — master + Spotify Connect |
+| Raspberry Pi 3 B/B+ + 3.5mm jack | ✅ Tested — remote client + Spotify Connect |
 | Raspberry Pi 4 + C-Media USB Audio Dongle | ✅ Tested and working |
 | Raspberry Pi 5 | Not yet tested |
 | Raspberry Pi Zero W | Should work, not tested |
+
+We only have two devices. If you can test on Pi 5, Pi Zero, USB DAC, HDMI, AirPlay, Bluetooth, or a 3+ device setup, please comment on [issue #39](https://github.com/JaragonCR/iotsound/issues/39). Hardware loans welcome.
 
 ## Setup and configuration
 
