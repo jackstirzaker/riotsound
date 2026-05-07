@@ -11,9 +11,17 @@ while ! curl --silent --output /dev/null "$SOUND_SUPERVISOR/ping"; do sleep 5; e
 # Get mode from sound supervisor (determines whether to start snapclient at all).
 MODE=$(curl --silent "$SOUND_SUPERVISOR/mode" || true)
 
-# --- ENV VARS ---
-# SOUND_MULTIROOM_LATENCY: latency in milliseconds to compensate for speaker hardware sync issues
-LATENCY=${SOUND_MULTIROOM_LATENCY:+"--latency $SOUND_MULTIROOM_LATENCY"}
+# --- ENV VARS ---
+# Latency defaults differ by role:
+#   master+client (local snapserver): 150ms -- loopback path, no network jitter
+#   remote client only: 400ms -- compensates for Pi hardware + network delay
+# SOUND_MULTIROOM_LATENCY overrides the remote-client default only.
+IS_MASTER=$(curl -sf "$SOUND_SUPERVISOR/multiroom/active" 2>/dev/null | grep -c '"active":true' || echo 0)
+if [[ "$IS_MASTER" == "1" ]]; then
+  LATENCY="--latency 150"
+else
+  LATENCY="--latency ${SOUND_MULTIROOM_LATENCY:-400}"
+fi
 
 # Wait until PulseAudio is actually ready to serve connections.
 # pactl info speaks the PA protocol — it only succeeds once pipewire-pulse
