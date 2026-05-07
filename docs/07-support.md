@@ -83,6 +83,10 @@ This however requires advanced knowledge and usage of balenaOS. So the advised c
 
 We are currently working on bringing back the configuration present in balenaOS 2.38 to the latest version so that the roll back is not necessary; you can keep track of it [here](https://github.com/balena-os/balena-raspberrypi/issues/476).
 
+##### Avoid WPA3 / PMF on 2.4 GHz
+
+The BCM43438/CYW43438 chip on Raspberry Pi 3 B/B+ can mishandle multicast frames when the access point enforces WPA3 or Protected Management Frames (PMF) on the 2.4 GHz band. This can cause mDNS discovery failures (devices not appearing in Spotify Connect or multi-room) in addition to audio cuts. If your router offers a separate 2.4 GHz SSID or per-band security settings, configure that network to use WPA2-only with PMF disabled for Pi 3 clients.
+
 ### Audio is delayed
 
 #### Description
@@ -110,7 +114,12 @@ Streaming audio to a device works fine but other devices on the network don't sy
 
 Multi-room is enabled by default in all device types. Ensure your device is properly configured. You can see the list of default modes of operation [here](device-support).
 
-If your device is properly configured and still can't get multi-room to work try power cycling the `master server` device. Devices might have missed the event broadcast where a device announces itself as a new `master server`, by rebooting it we force the device to send them again.
+IoTSound uses mDNS (Bonjour) for master discovery — client devices poll for the `_snapcast._tcp` advertisement every 30 seconds. If a client doesn't pick up the master within a minute of audio starting, check the following:
+
+- **Same subnet** — mDNS is link-local and will not cross VLANs or subnet boundaries. All IoTSound devices must be on the same IP subnet. If they are on different subnets, set `SOUND_MULTIROOM_MASTER` to the master device's IP to bypass discovery.
+- **Inter-band multicast** — If devices are on different WiFi bands (e.g. one on 2.4 GHz, another on 5 GHz/WiFi 6), your router may not forward multicast between them. Check your router for a "multicast between bands" or "band bridge" setting, or move all IoTSound devices to the same band.
+- **WPA3 / PMF on Pi 3** — See the note under [Audio cuts or is very stuttery](#audio-cuts-or-is-very-stuttery) above.
+- **Manual override** — Set `SOUND_MULTIROOM_MASTER=<master-ip>` on client devices to skip mDNS entirely while you diagnose the network issue.
 
 ### No audio on HDMI output on Raspberry Pi 4
 
@@ -122,7 +131,7 @@ HDMI audio output is currently not working as intended on Raspberry Pi 4. See th
 
 You can force HDMI audio to work by setting the device environment variable `BALENA_HOST_CONFIG_hdmi_mode` to `2`. Thanks to [@zchbndcc9](https://github.com/zchbndcc9) for finding this workaround.
 
-### No audio when using balenaOS 64 bit on Raspberry Pi 3's
+### No audio when using balenaOS 64 bit on Raspberry Pi 3s
 
 #### Description
 
@@ -135,7 +144,63 @@ For details see:
 
 #### Workaround
 
-Remove the `vc4-kms-v3d` dtoverlay setting from the `Device Configuration` section of your device.
+For the onboard 3.5mm headphone jack, set these values on the specific Pi 3 device in balenaCloud `Device Configuration`:
+
+| Variable | Value |
+| -------- | ----- |
+| `BALENA_HOST_CONFIG_dtoverlay` | `"vc4-kms-v3d,noaudio"` |
+| `BALENA_HOST_CONFIG_dtparam` | `"i2c_arm=on","spi=on","audio=on"` |
+
+The important detail is `noaudio` on the `vc4-kms-v3d` overlay. Do not use `vc4-kms-v3d,audio=off`; on recent 64-bit balenaOS and Supervisor releases that value can make the device repeatedly apply host configuration. Do not rely on manual edits to `/mnt/boot/config.txt` either, because Supervisor rewrites that file from balenaCloud-managed configuration.
+
+## Enabling debug mode
+
+Setting `LOG_LEVEL=debug` on a device (or fleet) is the universal debug switch. It enables verbose logging across all IoTSound services simultaneously:
+
+| Service | Effect |
+|---|---|
+| `sound-supervisor` | Play/stop/election events logged in detail |
+| `audio` | PulseAudio log level raised to debug |
+| `librespot` | Spotify client logs at debug verbosity |
+| `multiroom-client` | Periodic waiting heartbeat logged every 5 minutes |
+| `support-toolkit` | Debug toolkit container stays running |
+
+### Setting the variable
+
+To enable on a single device via balena CLI:
+```bash
+balena env set LOG_LEVEL debug --device <uuid>
+```
+
+To enable fleet-wide:
+```bash
+balena env set LOG_LEVEL debug --fleet <fleet-slug>
+```
+
+To disable (reverts all services to normal verbosity):
+```bash
+balena env rm LOG_LEVEL --device <uuid>
+```
+
+### Using the debug toolkit
+
+IoTSound ships a `support-toolkit` container that stays dormant (exits immediately) unless `LOG_LEVEL=debug` is set. When active, you can shell into it for live network diagnostics:
+
+```bash
+balena ssh <uuid> -s support-toolkit
+```
+
+Inside you have access to standard network tools: `tcpdump`, `curl`, `dig`, `nslookup`, `netstat`, and others. This is useful for diagnosing mDNS/multiroom discovery issues — for example:
+
+```bash
+# Watch mDNS traffic on the LAN interface
+tcpdump -n -i wlan0 udp port 5353
+
+# Check if snapserver is reachable
+curl -s http://localhost:1780/jsonrpc -d '{"id":1,"jsonrpc":"2.0","method":"Server.GetStatus"}'
+```
+
+The container exits automatically when `LOG_LEVEL` is removed or set to any value other than `debug`.
 
 ## Contact us
 

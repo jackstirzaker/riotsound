@@ -3,6 +3,8 @@ version: "2.1"
 volumes:
   spotifycache:
   librespot-config:
+  karaoke-media:
+  karaoke-data:
 
 services:
   # Core services
@@ -31,14 +33,12 @@ services:
   multiroom-server:
     build: ./core/multiroom/server
     restart: on-failure
-    ports:
-      - 1704:1704
-      - 1705:1705
-      - 1780:1780
+    network_mode: host
 
   multiroom-client:
     build: ./core/multiroom/client
     restart: on-failure
+    network_mode: host
 
   wifi-watchdog:
     build:
@@ -86,6 +86,43 @@ services:
    
   hostname:
    build: ./core/hostname
-   restart: no
+   restart: unless-stopped
    labels:
      io.balena.features.supervisor-api: "1"
+
+  # Debug toolkit — stays running only when LOG_LEVEL=debug is set on the device,
+  # exits immediately otherwise. Use: balena ssh <uuid> -s support-toolkit
+  # LOG_LEVEL=debug also enables verbose output in sound-supervisor, audio, and librespot.
+  support-toolkit:
+    image: kb2ma/support-toolkit
+    network_mode: host
+    restart: "no"
+    entrypoint: ["sh", "-c", "if [ \"$LOG_LEVEL\" = \"debug\" ]; then exec sleep infinity; else exit 0; fi"]
+
+  # Karaoke plugin
+  karaoke-fetcher:
+    build: ./plugins/karaoke/fetcher
+    restart: on-failure
+    environment:
+      - MEDIA_PATH=/data/media
+      - KARAOKE_QUALITY=720
+    volumes:
+      - karaoke-media:/data/media
+
+  karaoke:
+    build: ./plugins/karaoke/app
+    restart: on-failure
+    ports:
+      - 8080:8080
+    environment:
+      - PULSE_SERVER=tcp:172.17.0.1:4317
+      - SOUND_SUPERVISOR_URL=http://172.17.0.1:80
+      - KARAOKE_QUALITY=720
+      - KARAOKE_MAX_QUEUE_PER_SINGER=3
+    volumes:
+      - karaoke-media:/data/media
+      - karaoke-data:/data/app
+    depends_on:
+      - audio
+      - sound-supervisor
+      - karaoke-fetcher

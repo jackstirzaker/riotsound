@@ -2,19 +2,26 @@
 set -e
 
 SOUND_SUPERVISOR_PORT=${SOUND_SUPERVISOR_PORT:-80}
-GW="$(ip route | awk '/default / { print $3 }')"
-SOUND_SUPERVISOR="$GW:$SOUND_SUPERVISOR_PORT"
-# audio container uses network_mode:host; override PULSE_SERVER to reach it via gateway IP
-export PULSE_SERVER="tcp:$GW:4317"
+SOUND_SUPERVISOR="localhost:$SOUND_SUPERVISOR_PORT"
+# host networking: audio and sound-supervisor share the host network stack
+export PULSE_SERVER="tcp:localhost:4317"
 # Wait for sound supervisor to start
 while ! curl --silent --output /dev/null "$SOUND_SUPERVISOR/ping"; do sleep 5; echo "Waiting for sound supervisor to start at $SOUND_SUPERVISOR"; done
 
 # Get mode from sound supervisor (determines whether to start snapclient at all).
 MODE=$(curl --silent "$SOUND_SUPERVISOR/mode" || true)
 
-# --- ENV VARS ---
-# SOUND_MULTIROOM_LATENCY: latency in milliseconds to compensate for speaker hardware sync issues
-LATENCY=${SOUND_MULTIROOM_LATENCY:+"--latency $SOUND_MULTIROOM_LATENCY"}
+# --- ENV VARS ---
+# Latency defaults differ by role:
+#   master+client (local snapserver): 150ms -- loopback path, no network jitter
+#   remote client only: 400ms -- compensates for Pi hardware + network delay
+# SOUND_MULTIROOM_LATENCY overrides the remote-client default only.
+IS_MASTER=$(curl -sf "$SOUND_SUPERVISOR/multiroom/active" 2>/dev/null | grep -c '"active":true' || echo 0)
+if [[ "$IS_MASTER" == "1" ]]; then
+  LATENCY="--latency 150"
+else
+  LATENCY="--latency ${SOUND_MULTIROOM_LATENCY:-400}"
+fi
 
 # Wait until PulseAudio is actually ready to serve connections.
 # pactl info speaks the PA protocol — it only succeeds once pipewire-pulse
@@ -23,30 +30,40 @@ LATENCY=${SOUND_MULTIROOM_LATENCY:+"--latency $SOUND_MULTIROOM_LATENCY"}
 # Log only on first wait and every 30s after to keep logs readable.
 _pa_waited=0
 _pa_log_interval=30
-until PULSE_SERVER="tcp:${GW}:4317" pactl info >/dev/null 2>&1; do
+until PULSE_SERVER="tcp:localhost:4317" pactl info >/dev/null 2>&1; do
   if [ $_pa_waited -eq 0 ] || [ $(( _pa_waited % _pa_log_interval )) -eq 0 ]; then
-    echo "[snapclient] Waiting for PulseAudio at tcp:${GW}:4317... (${_pa_waited}s)"
+    echo "[snapclient] Waiting for PulseAudio at tcp:localhost:4317... (${_pa_waited}s)"
   fi
   sleep 5
   _pa_waited=$(( _pa_waited + 5 ))
 done
 echo "[snapclient] PulseAudio ready (waited ${_pa_waited}s)"
 
-# AUTO role: container is pre-warmed at boot. Wait for master promotion before
-# fetching the master IP so we connect to the right server (our own snapserver,
-# which is also pre-warmed and will have pacat running by the time we start).
-# JOIN/HOST: proceed immediately — they always have a master to connect to.
+# AUTO role: container is pre-warmed at boot. Start snapclient once this device
+# has a real target: either local master promotion, or a discovered/default-room
+# master advertised by another device.
+# JOIN/HOST: use the same readiness check so JOIN waits for discovery instead
+# of falling back to its own IP.
 ROLE=$(curl -sf "$SOUND_SUPERVISOR/multiroom" 2>/dev/null | grep -o '"role":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
-if [[ "$ROLE" == "auto" ]]; then
-  echo "[snapclient] AUTO role — waiting for master promotion..."
-  until curl -sf "$SOUND_SUPERVISOR/multiroom/active" 2>/dev/null | grep -q '"active":true'; do
-    sleep 0.5
+if [[ "$ROLE" == "auto" || "$ROLE" == "join" || "$ROLE" == "host" ]]; then
+  echo "[snapclient] $ROLE role — waiting for snapcast target..."
+  _waited=0
+  until curl -sf "$SOUND_SUPERVISOR/multiroom/client-ready" 2>/dev/null | grep -q '"active":true'; do
+    if [[ "$LOG_LEVEL" == "debug" ]] && (( _waited % 300 == 0 )); then
+      echo "[snapclient] Still waiting for snapcast target... (${_waited}s)"
+    fi
+    sleep 1
+    _waited=$((_waited + 1))
   done
-  echo "[snapclient] Promoted — connecting to snapserver"
+  echo "[snapclient] Snapcast target ready (waited ${_waited}s)"
 fi
 
 # Fetch master IP after election completes (supervisor election runs in parallel with audio init).
 SNAPSERVER=$(curl --silent "$SOUND_SUPERVISOR/multiroom/master" || true)
+if [[ -z "$SNAPSERVER" ]]; then
+  echo "[snapclient] ERROR: no snapcast target available"
+  exit 1
+fi
 echo "Starting multi-room client..."
 echo "- balenaSound mode: $MODE"
 echo "- Target snapcast server: $SNAPSERVER"
@@ -64,7 +81,7 @@ fi
 # This bypasses ALSA entirely and connects directly to pipewire-pulse.
 # PULSE_SINK=balena-sound.output (set in Dockerfile) routes output to the right PipeWire sink.
 if [[ "$MODE" == "MULTI_ROOM" || "$MODE" == "MULTI_ROOM_CLIENT" ]]; then
-  PULSE_SERVER="tcp:${GW}:4317" \
+  PULSE_SERVER="tcp:localhost:4317" \
   PULSE_LATENCY_MSEC=200 \
   /usr/bin/snapclient \
     --player pulse \
@@ -72,6 +89,9 @@ if [[ "$MODE" == "MULTI_ROOM" || "$MODE" == "MULTI_ROOM_CLIENT" ]]; then
     $LATENCY \
     --hostID $SNAPCAST_CLIENT_ID \
     --logfilter *:error
+  RC=$?
+  echo "[snapclient] exited with code $RC"
+  exit $RC
 else
   echo "Multi-room client disabled. Exiting..."
   exit 0

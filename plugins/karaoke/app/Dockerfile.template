@@ -1,0 +1,28 @@
+FROM golang:1.26-trixie AS builder
+
+WORKDIR /build
+COPY go.mod ./
+RUN go mod download
+COPY . .
+RUN go build -o karaoke .
+
+FROM debian:trixie-slim
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    pulseaudio-utils \
+    curl \
+    fonts-dejavu-core \
+    qrencode \
+    nodejs \
+    python3 \
+    python3-pip \
+    && pip3 install --no-cache-dir --disable-pip-version-check --root-user-action=ignore --break-system-packages yt-dlp \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY --from=builder /build/karaoke .
+COPY static/ ./static/
+COPY start.sh .
+CMD ["./start.sh"]

@@ -134,18 +134,32 @@ This pins all snapclients to the specified IP and bypasses mDNS entirely.
 If speakers are noticeably out of sync, increase the group buffer:
 
 ```
-SOUND_GROUP_LATENCY = 600   # milliseconds (default: 400)
+SOUND_GROUP_LATENCY = 600   # milliseconds (default: 750)
 ```
 
-For per-device fine-tuning (e.g. a device with a slow DAC):
+For per-device fine-tuning on remote clients (e.g. a device with a slow DAC):
 
 ```
-SOUND_MULTIROOM_LATENCY = 100   # milliseconds, added on top of group latency
+SOUND_MULTIROOM_LATENCY = 400   # milliseconds; only applies to remote clients (default: 400)
 ```
+
+IoTSound automatically picks the right latency default based on election result:
+
+| Role at startup | `--latency` passed to snapclient |
+|---|---|
+| Master + client (owns snapserver) | 150 ms — loopback path, no network jitter |
+| Remote client only | 400 ms (or `SOUND_MULTIROOM_LATENCY` if set) |
+
+`SOUND_MULTIROOM_LATENCY` only overrides the remote-client default. It has no effect on the master device.
 
 ---
 
 ## Troubleshooting
+
+**Karaoke or Spotify appears to play but no speakers output**
+- Check `sound-supervisor` first. If logs show `PulseAudioWrapper pactl check failed ... (20/20)` and then no successful connection, supervisor may have started before PulseAudio was ready and failed before wiring play handlers. `/internal/play` can return `{"received":true}` while `/multiroom/active` stays false. Fix/verify `core/sound-supervisor/src/index.ts` and `PulseAudioWrapper.ts` so Pulse connects in the background and retries indefinitely.
+- Check `multiroom-client` logs. If snapclient exits with `Exception: No audio player support for: pulse` or `PCM device "default" not found`, the Snapcast client image does not support the configured PulseAudio player/output. Rebuild/fix the client image before debugging routing further.
+- Check networking. The Snapcast master IP advertised by mDNS must be reachable from the `multiroom-client` container. If the client is isolated on its own Docker network, it may discover an address that the container cannot route to. Use host networking or a deliberate bridge/port design so clients can reach TCP `1704` on the advertised master.
 
 **Devices don't sync after streaming starts**
 - Wait up to 10 seconds — mDNS discovery can take a moment on first connection

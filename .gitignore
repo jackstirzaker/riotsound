@@ -5,6 +5,8 @@ landr-dist
 *.traineddata
 node_modules
 build
+__pycache__/
+*.pyc
 core/multiroom/server/snapweb
 labs-docs-builder
 
@@ -13,3 +15,6 @@ docs/BASELINE_ISSUES.md
 MEMORY.md
 CLAUDE.md
 .claude/
+
+# Inspirational/reference clones kept outside this repo.
+pitube-karaoke/

@@ -23,9 +23,11 @@ function resolveRole(): MultiroomRole {
 }
 
 const deviceType: string = process.env.BALENA_DEVICE_TYPE ?? 'unknown'
+const logLevel = (process.env.SOUND_SUPERVISOR_LOG_LEVEL ?? process.env.LOG_LEVEL ?? 'info').toLowerCase()
 
 export const constants = {
-  debug: process.env.SOUND_SUPERVISOR_DEBUG ? true : false,
+  debug: logLevel === 'debug',
+  logLevel,
   port: checkInt(process.env.SOUND_SUPERVISOR_PORT) ?? 80,
   role: resolveRole(),
   groupName: process.env.SOUND_GROUP_NAME,
@@ -34,6 +36,8 @@ export const constants = {
   balenaDeviceType: deviceType,
   volume: checkInt(process.env.SOUND_VOLUME) ?? 75,
   inputSink: process.env.SOUND_INPUT_SINK ?? 'balena-sound.input',
+  standaloneBufferMs: Math.max(50, Math.min(checkInt(process.env.SOUND_STANDALONE_BUFFER_MS) ?? 150, 500)),
   multiroomBufferMs: Math.max(50, Math.min(checkInt(process.env.SOUND_MULTIROOM_BUFFER_MS) ?? 400, 2000)),
-  multiroomMaster: process.env.SOUND_MULTIROOM_MASTER
+  multiroomMaster: process.env.SOUND_MULTIROOM_MASTER,
+  multiroomClientLatency: checkInt(process.env.SOUND_MULTIROOM_LATENCY) ?? 400
 }

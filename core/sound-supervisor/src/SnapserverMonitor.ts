@@ -4,19 +4,20 @@ import AvahiAdvertiser from './AvahiAdvertiser'
 import { browseSnapcast } from './AvahiBrowser'
 
 const SNAPSERVER_URL = 'http://localhost:1780/jsonrpc'
-const STANDALONE_BUFFER_MS = 50
 const POLL_INTERVAL_MS = 5000
 const DISCOVERY_INTERVAL_MS = 15000
 const RESTART_COOLDOWN_MS = 20000
 
 export interface SnapserverBufferStatus {
   configured: number
+  standalone: number
   effective: number
   mode: 'standalone' | 'multiroom'
 }
 
 export interface MonitorConfig {
   bufferMs: number
+  standaloneBufferMs: number
   groupName: string | undefined
   deviceUuid: string
   groupLatency: number
@@ -28,7 +29,8 @@ export interface MonitorConfig {
 
 export default class SnapserverMonitor {
   private configuredBufferMs: number
-  private effectiveBufferMs: number = STANDALONE_BUFFER_MS
+  private standaloneBufferMs: number
+  private effectiveBufferMs: number
   private previousRemoteCount: number = 0
   private cooldownUntil: number = 0
   private pollInterval: NodeJS.Timeout | null = null
@@ -44,17 +46,19 @@ export default class SnapserverMonitor {
   private readonly deviceUuid: string
   private readonly groupLatency: number
   private readonly hwLatency: number
-  private readonly localIp: string
+  private readonly localIp: string | undefined
   private readonly multiroomMaster: string | undefined
   private isMaster: boolean
 
   constructor(cfg: MonitorConfig) {
     this.configuredBufferMs = cfg.bufferMs
+    this.standaloneBufferMs = cfg.standaloneBufferMs
+    this.effectiveBufferMs = this.standaloneBufferMs
     this.groupName = cfg.groupName
     this.deviceUuid = cfg.deviceUuid
     this.groupLatency = cfg.groupLatency
     this.hwLatency = cfg.hwLatency
-    this.localIp = cfg.localIp
+    this.localIp = cfg.localIp === 'localhost' ? undefined : cfg.localIp
     this.multiroomMaster = cfg.multiroomMaster
     this.isMaster = cfg.isMaster
   }
@@ -64,8 +68,9 @@ export default class SnapserverMonitor {
   getStatus(): SnapserverBufferStatus {
     return {
       configured: this.configuredBufferMs,
+      standalone: this.standaloneBufferMs,
       effective: this.effectiveBufferMs,
-      mode: this.effectiveBufferMs === STANDALONE_BUFFER_MS ? 'standalone' : 'multiroom',
+      mode: this.effectiveBufferMs === this.standaloneBufferMs ? 'standalone' : 'multiroom',
     }
   }
 
@@ -79,17 +84,27 @@ export default class SnapserverMonitor {
 
   // Returns master IP: env override → mDNS discovered → own IP fallback.
   getMasterIp(): string {
-    return this.multiroomMaster ?? this.discoveredMasterIp ?? this.localIp
+    return this.multiroomMaster ?? this.discoveredMasterIp ?? this.localIp ?? 'localhost'
+  }
+
+  // Returns only a usable remote/explicit master for client join decisions.
+  // AUTO clients must not fall back to their own IP while idle, otherwise they
+  // never join an already-advertised room.
+  getDiscoveredMasterIp(): string | null {
+    return this.multiroomMaster ?? this.discoveredMasterIp
   }
 
   // Propagate volume to all snapcast clients in the group via JSON-RPC.
   async setGroupVolume(percent: number): Promise<void> {
     if (!this.cachedGroupId) return
     try {
-      await axios.post(SNAPSERVER_URL, {
+      const resp = await axios.post(SNAPSERVER_URL, {
         id: 3, jsonrpc: '2.0', method: 'Group.SetVolume',
         params: { id: this.cachedGroupId, volume: { percent: Math.round(percent), muted: false } }
       }, { timeout: 3000 })
+      if (resp.data?.error) {
+        throw new Error(resp.data.error.message ?? JSON.stringify(resp.data.error))
+      }
       console.log(`[snapserver-monitor] Group volume set to ${Math.round(percent)}%`)
     } catch (err) {
       console.log(`[snapserver-monitor] Failed to set group volume: ${(err as Error).message}`)
@@ -99,11 +114,14 @@ export default class SnapserverMonitor {
   start(): void {
     // Poll snapserver HTTP API only if this device is the elected master.
     // Client devices run discovery only so they can find the master IP.
+    // Masters never browse: two Bonjour instances bound to 0.0.0.0:5353 on
+    // the same host interfere and prevent the advertiser from receiving queries.
     if (this.isMaster) {
       this.pollInterval = setInterval(() => this.poll(), POLL_INTERVAL_MS)
+    } else {
+      this.discoveryInterval = setInterval(() => this.discover(), DISCOVERY_INTERVAL_MS)
+      this.discover().catch(() => {})
     }
-    this.discoveryInterval = setInterval(() => this.discover(), DISCOVERY_INTERVAL_MS)
-    this.discover().catch(() => {})
   }
 
   stop(): void {
@@ -117,13 +135,25 @@ export default class SnapserverMonitor {
     if (this.isMaster === isMaster) return
     this.isMaster = isMaster
     console.log(`[snapserver-monitor] Role transition → ${isMaster ? 'master' : 'client'}`)
-    if (isMaster && !this.pollInterval) {
-      this.pollInterval = setInterval(() => this.poll(), POLL_INTERVAL_MS)
-    } else if (!isMaster && this.pollInterval) {
-      clearInterval(this.pollInterval)
-      this.pollInterval = null
-      this.advertiser.unpublish()
-      this.serverWasUp = false
+    if (isMaster) {
+      // Stop browsing — masters advertise, they don't need to discover.
+      // Two Bonjour instances on 0.0.0.0:5353 interfere; only the advertiser runs.
+      if (this.discoveryInterval) { clearInterval(this.discoveryInterval); this.discoveryInterval = null }
+      if (!this.pollInterval) {
+        this.pollInterval = setInterval(() => this.poll(), POLL_INTERVAL_MS)
+      }
+    } else {
+      if (this.pollInterval) {
+        clearInterval(this.pollInterval)
+        this.pollInterval = null
+        this.advertiser.unpublish()
+        this.serverWasUp = false
+      }
+      // Start browsing to find the new master.
+      if (!this.discoveryInterval) {
+        this.discoveryInterval = setInterval(() => this.discover(), DISCOVERY_INTERVAL_MS)
+        this.discover().catch(() => {})
+      }
     }
   }
 
@@ -149,13 +179,15 @@ export default class SnapserverMonitor {
       const remoteCount = Math.max(0, connectedCount - 1)
 
       if (this.previousRemoteCount === 0 && remoteCount > 0) {
-        console.log(`[snapserver-monitor] Remote client joined (connected=${connectedCount}). Buffer: standalone → ${this.configuredBufferMs}ms`)
-        this.effectiveBufferMs = this.configuredBufferMs
-        this.triggerRestart('multiroom')
+        if (this.effectiveBufferMs !== this.configuredBufferMs) {
+          console.log(`[snapserver-monitor] Remote client joined (connected=${connectedCount}). Buffer: standalone → ${this.configuredBufferMs}ms`)
+          this.effectiveBufferMs = this.configuredBufferMs
+          this.triggerRestart('multiroom')
+        } else {
+          console.log(`[snapserver-monitor] Remote client joined (connected=${connectedCount}). Buffer already ${this.effectiveBufferMs}ms`)
+        }
       } else if (this.previousRemoteCount > 0 && remoteCount === 0) {
-        console.log(`[snapserver-monitor] Last remote client left. Buffer: ${this.effectiveBufferMs}ms → standalone (${STANDALONE_BUFFER_MS}ms)`)
-        this.effectiveBufferMs = STANDALONE_BUFFER_MS
-        this.triggerRestart('standalone')
+        console.log(`[snapserver-monitor] Last remote client left. Keeping ${this.effectiveBufferMs}ms buffer until idle demotion`)
       }
 
       this.previousRemoteCount = remoteCount
@@ -174,7 +206,7 @@ export default class SnapserverMonitor {
     if (this.discovering) return
     this.discovering = true
     try {
-      const services = await browseSnapcast(this.groupName)
+      const services = await browseSnapcast(this.groupName, 8000, this.localIp)
       const newIp = services[0]?.ip ?? null
       if (newIp !== this.discoveredMasterIp) {
         console.log(`[snapserver-monitor] Master IP: ${this.discoveredMasterIp ?? '(none)'} → ${newIp ?? '(none)'}`)

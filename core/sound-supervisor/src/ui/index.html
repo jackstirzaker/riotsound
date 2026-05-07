@@ -126,7 +126,8 @@
                     class="form-range"
                     id="buffer-slider"
                   />
-                  <small class="text-muted">Configured: <span id="buffer-configured-text">400</span>ms when clients join</small>
+                  <small class="text-muted">Configured: <span id="buffer-configured-text">400</span>ms when clients join</small><br/>
+                  <small class="text-muted">Client latency: <span id="client-latency-text">—</span>ms (<span id="client-latency-role-text">—</span>)</small>
                 </div>
               </div>
             </div>
@@ -172,6 +173,18 @@
                       </button>
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row" style="padding-top: 1rem">
+            <div class="col-sm-4 offset-sm-4">
+              <div class="card text-center h-100" style="background-color: rgba(103, 58, 183, 0.08); border-color: #673ab7">
+                <div class="card-body">
+                  <h5 class="card-title" style="color: #673ab7">Karaoke</h5>
+                  <p class="card-text">Queue songs, manage singers, and stream to the room.</p>
+                  <button type="button" class="btn" style="background-color: #673ab7; color: white" onclick="window.open('http://' + window.location.hostname + ':8080', '_blank')">Open Karaoke</button>
                 </div>
               </div>
             </div>
@@ -310,6 +323,8 @@
       var bufferConfiguredText = document.getElementById("buffer-configured-text");
       var bufferModeText = document.getElementById("buffer-mode-text");
       var bufferEffectiveText = document.getElementById("buffer-effective-text");
+      var clientLatencyText = document.getElementById("client-latency-text");
+      var clientLatencyRoleText = document.getElementById("client-latency-role-text");
 
       bufferSlider.oninput = function () {
         bufferConfiguredText.innerHTML = this.value;
@@ -331,6 +346,10 @@
           bufferConfiguredText.innerHTML = buf.configured;
           bufferEffectiveText.innerHTML = buf.effective;
           bufferModeText.innerHTML = buf.mode === "standalone" ? "Standalone" : "Multi-room";
+          if (buf.clientLatency !== undefined) {
+            clientLatencyText.innerHTML = buf.clientLatency;
+            clientLatencyRoleText.innerHTML = buf.clientLatency === 150 ? "master" : "remote client";
+          }
         }
       }
 
