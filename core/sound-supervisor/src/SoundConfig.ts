@@ -19,8 +19,17 @@ export default class SoundConfig {
   private electedRole: ElectedRole | null = null
   private readonly sourcePlugins = ['airplay', 'librespot', 'bluetooth', 'karaoke', 'karaoke-fetcher']
 
-  private safeService(fn: (s: string) => Promise<unknown>, service: string): void {
-    fn(service).catch((err: Error) => console.log(`Service call failed [${service}]: ${err.message}`))
+  private safeService(fn: (s: string) => Promise<unknown>, service: string, attempt = 1): void {
+    fn(service).catch((err: unknown) => {
+      const status = (err as { response?: { status?: number } })?.response?.status
+      if (status === 423 && attempt <= 3) {
+        const delay = attempt * 2000
+        console.log(`Service call locked [${service}] (423), retrying in ${delay}ms (attempt ${attempt}/3)`)
+        setTimeout(() => this.safeService(fn, service, attempt + 1), delay)
+      } else {
+        console.log(`Service call failed [${service}]: ${(err as Error).message}`)
+      }
+    })
   }
 
   private startSourcePlugins(): void {
