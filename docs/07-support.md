@@ -83,6 +83,10 @@ This however requires advanced knowledge and usage of balenaOS. So the advised c
 
 We are currently working on bringing back the configuration present in balenaOS 2.38 to the latest version so that the roll back is not necessary; you can keep track of it [here](https://github.com/balena-os/balena-raspberrypi/issues/476).
 
+##### Avoid WPA3 / PMF on 2.4 GHz
+
+The BCM43438/CYW43438 chip on Raspberry Pi 3 B/B+ can mishandle multicast frames when the access point enforces WPA3 or Protected Management Frames (PMF) on the 2.4 GHz band. This can cause mDNS discovery failures (devices not appearing in Spotify Connect or multi-room) in addition to audio cuts. If your router offers a separate 2.4 GHz SSID or per-band security settings, configure that network to use WPA2-only with PMF disabled for Pi 3 clients.
+
 ### Audio is delayed
 
 #### Description
