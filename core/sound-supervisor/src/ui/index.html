@@ -126,7 +126,8 @@
                     class="form-range"
                     id="buffer-slider"
                   />
-                  <small class="text-muted">Configured: <span id="buffer-configured-text">400</span>ms when clients join</small>
+                  <small class="text-muted">Configured: <span id="buffer-configured-text">400</span>ms when clients join</small><br/>
+                  <small class="text-muted">Client latency: <span id="client-latency-text">—</span>ms (<span id="client-latency-role-text">—</span>)</small>
                 </div>
               </div>
             </div>
@@ -322,6 +323,8 @@
       var bufferConfiguredText = document.getElementById("buffer-configured-text");
       var bufferModeText = document.getElementById("buffer-mode-text");
       var bufferEffectiveText = document.getElementById("buffer-effective-text");
+      var clientLatencyText = document.getElementById("client-latency-text");
+      var clientLatencyRoleText = document.getElementById("client-latency-role-text");
 
       bufferSlider.oninput = function () {
         bufferConfiguredText.innerHTML = this.value;
@@ -343,6 +346,10 @@
           bufferConfiguredText.innerHTML = buf.configured;
           bufferEffectiveText.innerHTML = buf.effective;
           bufferModeText.innerHTML = buf.mode === "standalone" ? "Standalone" : "Multi-room";
+          if (buf.clientLatency !== undefined) {
+            clientLatencyText.innerHTML = buf.clientLatency;
+            clientLatencyRoleText.innerHTML = buf.clientLatency === 150 ? "master" : "remote client";
+          }
         }
       }
 

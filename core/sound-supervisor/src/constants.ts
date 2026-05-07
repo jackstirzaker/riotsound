@@ -38,5 +38,6 @@ export const constants = {
   inputSink: process.env.SOUND_INPUT_SINK ?? 'balena-sound.input',
   standaloneBufferMs: Math.max(50, Math.min(checkInt(process.env.SOUND_STANDALONE_BUFFER_MS) ?? 150, 500)),
   multiroomBufferMs: Math.max(50, Math.min(checkInt(process.env.SOUND_MULTIROOM_BUFFER_MS) ?? 400, 2000)),
-  multiroomMaster: process.env.SOUND_MULTIROOM_MASTER
+  multiroomMaster: process.env.SOUND_MULTIROOM_MASTER,
+  multiroomClientLatency: checkInt(process.env.SOUND_MULTIROOM_LATENCY) ?? 400
 }

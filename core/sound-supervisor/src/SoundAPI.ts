@@ -152,13 +152,14 @@ export default class SoundAPI {
       }
     })
 
-    // GET /multiroom/buffer — returns { configured, effective, mode }
+    // GET /multiroom/buffer — returns { configured, effective, mode, clientLatency }
     // multiroom-server/start.sh reads this on every (re)start to know which bufferMs to use.
     this.api.get('/multiroom/buffer', (_req, res) => {
       const status = this.monitor
         ? this.monitor.getStatus()
         : { configured: constants.multiroomBufferMs, standalone: constants.standaloneBufferMs, effective: constants.standaloneBufferMs, mode: 'standalone' as const }
-      res.json(status)
+      const clientLatency = this.config.isElectedMaster() ? 150 : constants.multiroomClientLatency
+      res.json({ ...status, clientLatency })
     })
 
     // POST /multiroom/buffer — update the configured multi-room buffer (50–2000ms).
@@ -177,7 +178,8 @@ export default class SoundAPI {
         console.log(`Failed to persist SOUND_MULTIROOM_BUFFER_MS: ${(err as Error).message}`)
       }
       const status = this.monitor?.getStatus() ?? { configured: bufferMs, standalone: constants.standaloneBufferMs, effective: constants.standaloneBufferMs, mode: 'standalone' as const }
-      res.json(status)
+      const clientLatency = this.config.isElectedMaster() ? 150 : constants.multiroomClientLatency
+      res.json({ ...status, clientLatency })
     })
 
     // --- Internal (WirePlumber → supervisor events) ---
