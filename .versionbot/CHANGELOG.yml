@@ -1,4 +1,828 @@
 - commits:
+    - subject: "docs(readme): hard pass for v5.0 — remove completed version tables and
+        stale content"
+      hash: 760ba8d10f41af7156aac59a79a6a6a0d89d1015
+      body: >
+        Removed v4.x completed-modernization tables, aspirational sprint items,
+
+        duplicate deploy button, wrong SOUND_GROUP_LATENCY default (750 not
+        400),
+
+        stale "original docs" reference, and outdated credits. Rewired docs
+
+        section to point at local files. Cleaned Contributing section.
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "feat: v5.0 — Multiroom 2.0, Karaoke, and platform hardening"
+      hash: 844f6d0c884fbb733212514b3ba5d0aa6f03372c
+      body: >
+        Multiroom 2.0:
+
+        - mDNS/Bonjour discovery replaces cote event broadcast
+
+        - Dynamic master election with 30s demotion on stream stop
+
+        - Role-aware snapclient latency: 150ms master, 400ms remote client
+
+        - Pre-warmed containers for <500ms first-play latency
+
+        - SOUND_MULTIROOM_MASTER override for managed/VLAN networks
+
+        - Universal debug switch: LOG_LEVEL=debug enables all services +
+        support-toolkit
+
+
+        Karaoke:
+
+        - New karaoke plugin with Go audience/singer UI
+
+        - Direct MP4 browser playback, local speaker mode, mic loopback
+
+        - Queue management, singer view, history dedup, QR code join
+
+        - Python/Waitress fetcher sidecar with daily yt-dlp updates
+
+
+        Platform hardening:
+
+        - Supervisor 423 lock retry on all service start/stop calls
+
+        - Network readiness wait in librespot before mDNS bind
+
+        - PulseAudio indefinite retry in sound-supervisor
+
+        - snapclient exit code propagation and PA readiness polling
+      footer:
+        Change-type: major
+        change-type: major
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "docs: link issue #39 in README hardware tested section"
+      hash: 8bf7e6bfb0beefeb6da5786fd1ea0bdfdf6b884c
+      body: |
+        Updated hardware table to reflect v5.0 validated config and added
+        call-to-action linking to the help-wanted testing issue.
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "docs: add v5.0 testing matrix and hardware help-wanted"
+      hash: 466ba20437ec7ec7c9a4229590682840adfb1009
+      body: >
+        Documents what was validated (Pi 3 B/B+ + Pi 4, DAC HAT, 3.5mm jack,
+
+        Spotify Connect, multiroom 1-client) and gaps (Pi 5, USB DAC, HDMI,
+
+        AirPlay, BT, 3+ clients). Calls for community testing and hardware
+        loans.
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "docs: fix stale defaults and update multiroom troubleshooting"
+      hash: 7662873c03e1aec12cbf3bfe305ab1473385ded2
+      body: >
+        - SOUND_GROUP_LATENCY default corrected to 750ms (was 400ms in both
+        docs)
+
+        - Multiroom troubleshooting rewritten for mDNS: subnet/band/WPA3 checks
+          replace old cote event-broadcast language
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "fix(sound-supervisor): retry safeService on 423 supervisor lock"
+      hash: fabf914546e2e17fe1c279b7f82005dbfe4d9a91
+      body: |
+        When the balena supervisor is locked (e.g. during a concurrent service
+        bounce), service start/stop calls return 423. Previously these were
+        silently dropped, leaving snapserver or multiroom-client in the wrong
+        state. Now retries up to 3 times at 2s/4s/6s intervals.
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "docs: note WPA3/PMF multicast issue on Pi 3 BCM43438"
+      hash: 8ffe850c0ae98454a45f5ed8a467d5d16dcd2aed
+      body: |
+        Older Broadcom chips can mishandle multicast under WPA3/PMF on 2.4GHz,
+        causing mDNS failures and audio cuts. Added workaround: use WPA2-only
+        with PMF disabled for Pi 3 clients.
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "feat(ui): show client latency role in multi-room buffer card"
+      hash: 4f700acffc8573564bd0c8a1d6fde7839b290b37
+      body: |
+        The buffer card now shows a second line: "Client latency: Xms (master /
+        remote client)". The value comes from /multiroom/buffer which returns
+        clientLatency = 150ms when this device is elected master, or
+        SOUND_MULTIROOM_LATENCY (default 400ms) when it is a remote client.
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "fix(librespot): wait for routable network before starting daemon"
+      hash: e4e975bc07b4c2cdd7cd2c782dbaedd820ced94a
+      body: |
+        On slow Pi 3 boards wlan0 can be assigned after PulseAudio is ready.
+        go-librespot's built-in mDNS responder binds at startup; without a real
+        interface it falls back to loopback and the device is invisible to
+        Spotify Connect on the LAN.
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "docs: document role-aware snapclient latency defaults"
+      hash: e8b3aa73da1ff1f5773ed4b0887413c2af44f893
+      body: |
+        SOUND_MULTIROOM_LATENCY now only overrides the remote-client default
+        (400ms). Master devices always use 150ms regardless of the env var.
+        Updated customization table and MULTIROOM.md latency section.
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "feat(multiroom): role-aware snapclient latency defaults"
+      hash: e680d3fc5138a09a435381e1c010e9218efbb47f
+      body: |
+        Master+client devices use 150ms (local loopback, no network jitter).
+        Remote-only clients default to 400ms. SOUND_MULTIROOM_LATENCY only
+        overrides the remote-client default; it has no effect when the device
+        owns the snapserver.
+      footer:
+        Change-type: minor
+        change-type: minor
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "fix(debug): use entrypoint override for support-toolkit; document
+        LOG_LEVEL=debug"
+      hash: a7e53be171032d6d12321e33e63077d4772dd551
+      body: >
+        - Override entrypoint instead of command so the image's own entrypoint
+          does not interfere with the shell gate check (/bin/sh confirmed present
+          via balena-engine run --entrypoint /bin/sh)
+        - Document LOG_LEVEL=debug as the universal debug switch in
+        docs/07-support.md
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "feat(debug): add support-toolkit container gated on LOG_LEVEL=debug"
+      hash: da22fac11fe01161493893a079811ec431345b4a
+      body: |
+        Deploys kb2ma/support-toolkit to all devices but only keeps it running
+        when SOUND_SUPERVISOR_DEBUG is set or LOG_LEVEL=debug. Otherwise it
+        exits immediately and stays stopped (restart: "no").
+
+        Also wire LOG_LEVEL=debug into multiroom-client's waiting heartbeat so
+        a single fleet/device variable enables all debug output consistently.
+
+        Use: balena ssh <uuid> -s support-toolkit
+      footer:
+        Change-type: minor
+        change-type: minor
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "fix(mdns): stop discovery on master to prevent advertiser interference"
+      hash: 90fd19fd3f01ca99c629b526e472cd2c9c7ef82d
+      body: |
+        Two Bonjour instances both bound to 0.0.0.0:5353 on the same host
+        interfere with each other: the browser socket can steal incoming mDNS
+        queries before the advertiser sees them, causing the advertiser to
+        never respond to client devices.
+
+        Masters don't need to browse — they know their own IP. Only client
+        devices run the discovery interval. On role transition to master the
+        discovery interval is stopped; on demotion back to client it is started.
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "fix(mdns): remove interface binding from mDNS browser"
+      hash: 2cb0353d383e1c080b91fad5612f7d89789d06bd
+      body: |
+        Binding the browser socket to the LAN unicast IP prevents it from
+        receiving multicast responses on Linux — a socket bound to
+        172.28.10.185 only receives packets destined for that address, not
+        packets destined for 224.0.0.251. This silently broke discovery on
+        client devices: queries went out but responses were never collected.
+
+        Same root cause as the advertiser fix (b4d87c6). Since all containers
+        use network_mode: host, the kernel routes outgoing mDNS queries to the
+        correct NIC without interface binding.
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "fix(mdns): unbind advertiser from specific interface"
+      hash: 992dc6aeb7d3e200f78749f2efcdebe0f1e5615f
+      body: |
+        The interface option on the advertiser socket prevented it from
+        receiving incoming queries and responding. Browser still uses the
+        interface binding to query on the correct LAN NIC; advertiser binds
+        to 0.0.0.0 so it can respond to queries from any interface.
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "fix(multiroom): silence ControlSessionHTTP ENOTCONN noise in snapserver"
+      hash: 453c8e7e79ded32a9dd0b355167d23a7a26be45d
+      body: ""
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "fix(multiroom): gate wait heartbeat behind SOUND_SUPERVISOR_DEBUG"
+      hash: 5976b3e46d96293b3f5b9ecc82351b399f2ebe35
+      body: ""
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "fix(multiroom): reduce waiting heartbeat to 5min, drop debug log"
+      hash: 9354234a7122f39eae9177621b6d58535e32c727
+      body: ""
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "fix(multiroom): exit with snapclient's code and log fallback check"
+      hash: 9743aef7d4131338f5d3fb797f757ba105d96557
+      body: |
+        - snapclient start.sh: capture snapclient exit code and propagate it so
+          on-failure policy can restart the container on pulse player crash
+        - Dockerfile: set PULSE_SERVER=tcp:localhost (host networking)
+        - index.ts: always log the T+20s fallback check result so we can see
+          whether clients were found or not
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "fix(multiroom): bind mDNS multicast to LAN interface"
+      hash: cef75c44b26c3ae3965ab75928f96a40ad19fce9
+      body: |
+        Devices with multiple network interfaces (Docker bridges, resin-vpn,
+        supervisor0) caused bonjour-service to bind the multicast socket to a
+        non-LAN interface, silently failing cross-device discovery. Passing the
+        detected LAN IP (wlan/eth) via the multicast-dns `interface` option
+        pins the socket to the correct NIC for both advertising and browsing.
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "fix(multiroom-client): wait indefinitely for snapcast target"
+      hash: d7f718d756d45aaa81418c66cf9a2529ba1a79fa
+      body: |
+        Removing the 60s client-ready timeout that was causing on-failure
+        restarts every minute when no master was present. The container should
+        wait until a master is promoted or discovered — the supervisor-side
+        rerouteInputDirect() fallback already handles the case where audio
+        is playing but Snapcast is broken. Log a heartbeat every 30s instead.
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "fix(hostname): reboot after apply, suppress repeated match logs"
+      hash: c37046b2ff5d070c789d0baf7a156add42c98e01
+      body: >
+        - Reboot via supervisor API after patching hostname so the change takes
+          effect (host-config hostname changes require a reboot).
+        - Log the "already set" message only once per container lifetime using a
+          shell flag; subsequent 60s poll cycles are silent when nothing changed.
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "fix(hostname): read host-config API to detect current hostname"
+      hash: a39cd475f620c7763d35b055309e8024ade2bfae
+      body: >
+        `hostname` inside a container returns the container's short ID, not the
+
+        host OS hostname. Compare against the supervisor host-config GET
+        endpoint
+
+        instead, which reflects the actual applied value. Guard against API
+
+        failures by skipping the PATCH when the response is empty, so a
+        transient
+
+        supervisor outage can't trigger a hostname change and device reboot.
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "fix(hostname): read host-config API instead of hostname command"
+      hash: f872c44f45d4684a85159a108f1d58d846aa6846
+      body: |
+        `hostname` inside a balena container returns the container's hostname
+        (a UUID fragment), not the host OS hostname. Comparing it against
+        SOUND_DEVICE_NAME always fails, causing a PATCH on every poll interval.
+        Read the current hostname from the supervisor host-config GET endpoint
+        instead, which returns the actual host-level value.
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "fix(multiroom): host networking, fallback routing, snapclient pulse
+        build"
+      hash: 0e0c852b96884bbc09f26ba3374f1ad896089a6a
+      body: >
+        - Switch multiroom-server and multiroom-client to network_mode:host so
+          snapclient has a direct route to snapserver (TCP 1704) and mDNS
+          advertisement uses the real LAN IP. Removes the bridge hairpin failure.
+        - Add pkg-config to snapclient builder so CMake pkg_check_modules finds
+          libpulse; add -DBUILD_WITH_PULSE=ON explicitly. Fixes the missing
+          --player pulse support that caused "No audio player support for: pulse".
+        - Move PulseAudio connect to background in sound-supervisor init so
+          /internal/play handlers and SnapserverMonitor are ready before Pulse
+          is up. Remove the 20-retry cap in PulseAudioWrapper so it never gives up.
+        - Add 20s multiroom fallback: if no snapclient connects after promotion,
+          reroute balena-sound.input directly to balena-sound.output via pactl
+          so audio is never silent when Snapcast is broken. Restore on demotion.
+        - Add SOUND_MULTIROOM_CLIENT_TIMEOUT (default 60s) to multiroom-client
+          so the client-ready wait exits for on-failure restart instead of blocking.
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "fix(karaoke): stabilize local audio and volume sync"
+      hash: ea0e5a3317f48880209aa012f67f7c1d3eaa0594
+      body: ""
+      footer:
+        Change-type: patch
+        change-type: patch
+      author: JaragonCR
+    - subject: "chore(deps): harden release base images and packages"
+      hash: 39fded09296cd9a0a146b3344664a494f96b500e
+      body: ""
+      footer:
+        Change-type: major
+        change-type: major
+      author: JaragonCR
+    - subject: "fix(audio): target hardware sinks for volume"
+      hash: f4e1fcce063f3a1f813b587c900fac4704968cdf
+      body: >
+        Apply volume changes to physical ALSA outputs and balena-sound.output so
+        multiroom clients control their local speaker level. Document the
+        Raspberry Pi 3 64-bit headphone jack overlay recipe.
+      footer:
+        Change-type: patch
+        change-type: patch
+      author: JaragonCR
+    - subject: "fix(supervisor): manage karaoke as source plugin"
+      hash: d994c836be40a0c5a740af285d97a819dd6fd3c4
+      body: >
+        Stop karaoke services on passive join devices and document plugin
+        service wiring requirements. Also avoid redundant hostname and dtoverlay
+        updates.
+      footer:
+        Change-type: patch
+        change-type: patch
+      author: JaragonCR
+    - subject: "meta: mark karaoke sprint as major release"
+      hash: 26aeb3f62fbb6aeb1ae4840e14234e88eb9ce7a7
+      body: ""
+      footer:
+        Change-type: major
+        change-type: major
+      author: JaragonCR
+    - subject: "fix(multiroom): raise standalone snapcast buffer"
+      hash: ffa3264570c42c72290910f72ebbe01f51a4b8b1
+      body: ""
+      footer:
+        Change-type: patch
+        change-type: patch
+      author: JaragonCR
+    - subject: "feat(karaoke): isolate local audio ownership"
+      hash: 4a848f86c22969c48b6c25e6dfbc1f7642ae0f38
+      body: ""
+      footer:
+        Change-type: minor
+        change-type: minor
+      author: JaragonCR
+    - subject: "fix(karaoke): force 2s GOP so hls_time 2 produces 2s segments"
+      hash: ee4f96c05df2c7e64ca49eec5c77fa1b700cb460
+      body: |
+        Without -g 48/-keyint_min 48, ffmpeg used the source video's native
+        keyframe interval (~8s for karaoke videos), making segments 8 seconds
+        long despite hls_time 2. hls.js then stalled 8s waiting for each new
+        segment. Using fixed GOP flags is cheaper than force_key_frames expr.
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "fix(karaoke): HLS always-on with audio; mode change only toggles
+        speakers"
+      hash: baff5a466cca3759f47b750b6cb5811c2576cbbb
+      body: |
+        HLS now runs for the full song duration with audio always included.
+        Switching between Speakers/Stream no longer restarts ffmpeg — it only
+        starts or stops the PipeWire process. Clients join the single persistent
+        stream and seek to play_position_ms on connect.
+
+        Also: drop video bitrate 1500k→1000k (less Pi CPU); clean up hls.js
+        config (remove live-sync overrides that were causing stall/reconnect).
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "fix(karaoke): volume slider controls video.volume in stream mode"
+      hash: 553aba80fb86eac44bd80074c26f4018f5e8610d
+      body: |
+        In stream mode audio comes from the browser's HLS video element, not
+        PipeWire/Snapcast. The slider now sets video.volume directly instead
+        of proxying to sound-supervisor (which was hitting the wrong group).
+        Switching modes refreshes the slider to match the new audio source.
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "fix(karaoke): fix nil panic, stale mode-change restart, and CPU
+        overhead"
+      hash: 1647a925769dff076abf088d070a9ca590368bd3
+      body: |
+        Three bugs fixed:
+        - Nil pointer panic: goroutine in play() captured hlsCmd/playerCmd
+          globals which were set to nil by the mode-change handler before
+          Wait() returned. Fix: snapshot cmd pointers into locals at start
+          of each loop iteration.
+        - Stale mode-change signal: modeChangeCh had a buffered signal from
+          a previous song, causing every new song to immediately restart its
+          ffmpeg processes. Fix: drain the channel at the top of play().
+        - CPU: remove force_key_frames expression (expensive on Pi); skip
+          rubberband filter when semitones=0 (passthrough is free).
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "fix(karaoke): fix HLS out-of-order with EVENT playlist + position seek"
+      hash: 6a566a7c6b5143fe69ee32c1948baf16d43da676
+      body: |
+        Switch from rolling live-HLS to EVENT-playlist HLS so all segments are
+        kept from seg0. Add play_position_ms to /api/data so the singer view
+        seeks to the current song position on connect instead of chasing a live
+        edge. Force keyframes every 2s for clean IDR segment boundaries.
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "fix(karaoke): client-side dedup history by yt_id"
+      hash: f2326a2efdceb0d023ae12b10fb1c015e8253155
+      body: |
+        Belt-and-suspenders guard on top of the GROUP BY yt_id backend fix;
+        also fixes the render-diff key (was using play_count which isn't
+        returned by the history query).
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "fix(karaoke): add -re to HLS ffmpeg, deduplicate history by yt_id"
+      hash: d264a333107134e088ce45f306c8dfb4bbbabc82
+      body: |
+        Without -re, ffmpeg processed a full video file in seconds; in stream
+        mode the player finished immediately and raced into the next song,
+        causing two songs to appear simultaneously. -re reads at native rate.
+
+        History "all" and "most" queries now GROUP BY yt_id so the same song
+        sung by different singers doesn't appear multiple times in the feed.
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "fix(karaoke): drop append_list, clean HLS dir per-song, fix stream
+        pitch shift"
+      hash: e6dd69cef15cd915c838b0a68a8464cac1c19257
+      body: >
+        The out-of-order/skipping artifacts were caused by -hls_flags
+        append_list:
+
+        each new song's ffmpeg appended to the old playlist, but old segments
+        were
+
+        already deleted by delete_segments. hls.js chased 404s and played
+        whatever
+
+        it found, producing random frame order. Fix:
+
+        - Remove append_list; each song gets a fresh playlist
+
+        - cleanHLS() deletes all *.ts + playlist.m3u8 before each song starts
+
+        - hls_list_size raised to 6 (12s of buffer)
+
+
+        Also fix stream mode pitch shift: buildHLSArgs now takes pitch float64
+        and
+
+        applies rubberband=pitch=X to the HLS audio (previously only
+        local/PipeWire
+
+        path had pitch shifting, so stream mode played at original pitch
+        regardless
+
+        of key offset).
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "fix(karaoke): show Next Up in singer view whenever now_playing+next_up
+        exist"
+      hash: d32dcece1e52b321d96471a2759aaf77195081f8
+      body: >
+        Previous condition (d.state==='playing') was too strict — playerState is
+        set
+
+        just before play() starts but handleAPIData derives now_playing from DB
+        status,
+
+        creating a window where they diverge. Use d.now_playing instead: if a
+        song is
+
+        in the DB as playing and there's a next song queued, show the Next Up
+        box.
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "fix(karaoke): stable HLS stream, Next Up while downloading, no waiting
+        flash"
+      hash: 00ec9d3ceb7a4ea92ca539528475ff221b2ebed9
+      body: >
+        HLS stability:
+
+        - Disable lowLatencyMode in hls.js (was too aggressive for Pi, caused
+        stalls)
+
+        - maxBufferLength=20, liveSyncDuration=4 — buffer more, stay 4s behind
+        live edge
+
+        - Stall detector: if video freezes 6s while playing, destroy and
+        recreate hls instance
+
+        - onStreamDown no longer immediately shows waiting screen; 4s grace
+        period so
+          same-singer 1s gaps show a frozen frame instead of a jarring waiting flash
+        - startStream() guarded with if(hls||playing) to prevent duplicate
+        instances
+
+        - HLS segments: hls_time 2, hls_list_size 5 — more headroom for Pi
+        encoding
+
+
+        Next Up fix:
+
+        - nextUp now queries ready+downloading+pending (not only ready), so a
+        song
+          shows as Next Up immediately after queuing, even while still downloading
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "fix(karaoke): hot-swap audio mode mid-play, Next Up top-right, stop
+        flickering"
+      hash: 9e56a78192fa8b326d4bc24cccf487ef4d9cd800
+      body: >
+        - play() now loops on modeChangeCh: switching local↔stream kills current
+        ffmpeg
+          processes and restarts from file beginning with correct audio routing, so
+          switching to stream mid-play immediately gives audio in the browser
+        - handleSetAudioMode signals modeChangeCh after updating audioMode
+
+        - stream.html: Next Up box moved to top-right corner (singer + song
+        title);
+          singer pill moved to top-left below back button so they don't overlap
+        - index.html: renderHistory/renderQueue skip DOM rebuild if data is
+        unchanged
+          (key comparison), eliminating the Sing Again flicker on every 1.5s poll
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "feat(karaoke): queue advancement, audio mode, up-next screen, QR,
+        singer view fixes"
+      hash: 17ec1eded965c7bdfac62cac9b519d9f8a06ed5e
+      body: >
+        Player:
+
+        - Fix queue not advancing: playerWorker now tracks lastSinger and
+        handles
+          between-song transitions (1s same singer, 10s different singer Up Next screen)
+        - Add audioMode global (local/stream): local=PipeWire+muted HLS,
+        stream=audio HLS only
+
+        - buildHLSArgs takes withAudio bool; strips audio track (-an) in local
+        mode
+
+
+        API:
+
+        - /api/data now returns state (idle/playing/up_next), up_next_until
+        (ms), audio_mode
+
+        - GET/POST /api/audio-mode for runtime toggle (not persisted)
+
+        - GET /api/qr generates QR PNG via qrencode for the join URL
+
+
+        Audience view (index.html):
+
+        - Coming Up section only shown when there are songs beyond Next Up
+
+        - Up Next overlay (10s countdown) blocks UI during singer transitions
+
+        - Audio mode toggle (Local speakers / Stream)
+
+        - QR code floating bottom-left
+
+        - Volume + audio mode in one control row
+
+
+        Singer view (stream.html):
+
+        - Volume slider controlling device output
+
+        - Audio mode toggle (Speakers / Stream)
+
+        - Up Next full-screen overlay with countdown during singer transitions
+
+        - Next Up pill shown while song is playing
+
+        - QR fixed to use /api/qr instead of missing static file
+
+
+        Singer profile (singer.html):
+
+        - Now Playing + Next Up cards at top
+
+        - Device volume slider (calls /api/volume directly)
+
+        - Audio mode toggle
+
+        - Fix queueSong FormData → URLSearchParams (fixes Sing Again / favorites
+        queue)
+      footer:
+        Change-type: minor
+        change-type: minor
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "fix(karaoke): add yt-dlp, fix search encoding, fix form parsing, add
+        UI link"
+      hash: 2a756ab9bd1e1311c8d14d2b438d26a25987feaa
+      body: >
+        - Add yt-dlp + nodejs + python3 to karaoke Dockerfile so search fallback
+        works
+
+        - URL-encode Invidious search query (was sending raw spaces/chars in
+        URL)
+
+        - Fix /add handler: frontend was sending multipart/form-data but
+        ParseForm
+          only handles application/x-www-form-urlencoded; switch to URLSearchParams
+        - Add Karaoke card to sound-supervisor UI linking to :8080 on same host
+      footer:
+        Change-type: patch
+        change-type: patch
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+    - subject: "feat(karaoke): scaffold karaoke + karaoke-fetcher containers"
+      hash: eb5e217c4ccbe35787db82f5d8eac80c4ea52012
+      body: >
+        karaoke-fetcher (Python/Flask):
+
+        - yt-dlp download service with progress tracking
+
+        - POST /fetch, GET /status/:id, GET /info/:yt_id, GET /health
+
+        - APScheduler: nightly yt-dlp self-update at 03:00
+
+        - Concurrent downloads via ThreadPoolExecutor
+
+
+        karaoke (Go/SQLite — fork of pitube-karaoke architecture):
+
+        - Full queue management with singer attribution
+
+        - Singer profiles: key offset (-6/+6 semitones), volume, history,
+        favorites
+
+        - Dual ffmpeg pipeline: audio → PipeWire, video → HLS stream (/stream/)
+
+        - Real-time pitch shifting via rubberband ffmpeg filter
+
+        - Key lock at T-0 (first-in-ready position), unlockable while queued
+
+        - Invidious search with yt-dlp fallback (same approach as
+        pitube-karaoke)
+
+        - "Next Up" burned into HLS stream via ffmpeg drawtext + textfile reload
+
+        - LRU storage eviction: 50% free-space default quota, 10% headroom
+
+        - Per-singer queue limit (KARAOKE_MAX_QUEUE_PER_SINGER, default 3)
+
+        - Song dedup warning before queueing
+
+        - Volume lever proxied to sound-supervisor /audio/volume
+
+        - Sing Again history with "Sang by me" and "Most sang" filters
+
+        - Singer profile page with favorites and Change Singer flow
+
+        - Singer stream view (HLS player + floating QR + profile pill)
+
+        - Sync offset API scaffold (Phase 2)
+
+
+        docker-compose: adds karaoke + karaoke-fetcher services with
+
+        karaoke-media and karaoke-data named volumes (shared between both).
+      footer:
+        Change-type: minor
+        change-type: minor
+        Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+        co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+      author: JaragonCR
+  version: 5.0.0
+  title: ""
+  date: 2026-05-07T03:45:18.422Z
+- commits:
     - subject: "docs: add SECURITY.md with vulnerability reporting policy"
       hash: 473c1806654ed4cf29e902e0b906d95d9b24d951
       body: ""

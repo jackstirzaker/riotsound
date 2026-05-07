@@ -4,6 +4,57 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/).
 Releases are automated by [Versionist](https://github.com/product-os/versionist).
 
+# v5.0.0
+## (2026-05-07)
+
+* docs(readme): hard pass for v5.0 — remove completed version tables and stale content [JaragonCR]
+* feat: v5.0 — Multiroom 2.0, Karaoke, and platform hardening [JaragonCR]
+* docs: link issue #39 in README hardware tested section [JaragonCR]
+* docs: add v5.0 testing matrix and hardware help-wanted [JaragonCR]
+* docs: fix stale defaults and update multiroom troubleshooting [JaragonCR]
+* fix(sound-supervisor): retry safeService on 423 supervisor lock [JaragonCR]
+* docs: note WPA3/PMF multicast issue on Pi 3 BCM43438 [JaragonCR]
+* feat(ui): show client latency role in multi-room buffer card [JaragonCR]
+* fix(librespot): wait for routable network before starting daemon [JaragonCR]
+* docs: document role-aware snapclient latency defaults [JaragonCR]
+* feat(multiroom): role-aware snapclient latency defaults [JaragonCR]
+* fix(debug): use entrypoint override for support-toolkit; document LOG_LEVEL=debug [JaragonCR]
+* feat(debug): add support-toolkit container gated on LOG_LEVEL=debug [JaragonCR]
+* fix(mdns): stop discovery on master to prevent advertiser interference [JaragonCR]
+* fix(mdns): remove interface binding from mDNS browser [JaragonCR]
+* fix(mdns): unbind advertiser from specific interface [JaragonCR]
+* fix(multiroom): silence ControlSessionHTTP ENOTCONN noise in snapserver [JaragonCR]
+* fix(multiroom): gate wait heartbeat behind SOUND_SUPERVISOR_DEBUG [JaragonCR]
+* fix(multiroom): reduce waiting heartbeat to 5min, drop debug log [JaragonCR]
+* fix(multiroom): exit with snapclient's code and log fallback check [JaragonCR]
+* fix(multiroom): bind mDNS multicast to LAN interface [JaragonCR]
+* fix(multiroom-client): wait indefinitely for snapcast target [JaragonCR]
+* fix(hostname): reboot after apply, suppress repeated match logs [JaragonCR]
+* fix(hostname): read host-config API to detect current hostname [JaragonCR]
+* fix(hostname): read host-config API instead of hostname command [JaragonCR]
+* fix(multiroom): host networking, fallback routing, snapclient pulse build [JaragonCR]
+* fix(karaoke): stabilize local audio and volume sync [JaragonCR]
+* chore(deps): harden release base images and packages [JaragonCR]
+* fix(audio): target hardware sinks for volume [JaragonCR]
+* fix(supervisor): manage karaoke as source plugin [JaragonCR]
+* meta: mark karaoke sprint as major release [JaragonCR]
+* fix(multiroom): raise standalone snapcast buffer [JaragonCR]
+* feat(karaoke): isolate local audio ownership [JaragonCR]
+* fix(karaoke): force 2s GOP so hls_time 2 produces 2s segments [JaragonCR]
+* fix(karaoke): HLS always-on with audio; mode change only toggles speakers [JaragonCR]
+* fix(karaoke): volume slider controls video.volume in stream mode [JaragonCR]
+* fix(karaoke): fix nil panic, stale mode-change restart, and CPU overhead [JaragonCR]
+* fix(karaoke): fix HLS out-of-order with EVENT playlist + position seek [JaragonCR]
+* fix(karaoke): client-side dedup history by yt_id [JaragonCR]
+* fix(karaoke): add -re to HLS ffmpeg, deduplicate history by yt_id [JaragonCR]
+* fix(karaoke): drop append_list, clean HLS dir per-song, fix stream pitch shift [JaragonCR]
+* fix(karaoke): show Next Up in singer view whenever now_playing+next_up exist [JaragonCR]
+* fix(karaoke): stable HLS stream, Next Up while downloading, no waiting flash [JaragonCR]
+* fix(karaoke): hot-swap audio mode mid-play, Next Up top-right, stop flickering [JaragonCR]
+* feat(karaoke): queue advancement, audio mode, up-next screen, QR, singer view fixes [JaragonCR]
+* fix(karaoke): add yt-dlp, fix search encoding, fix form parsing, add UI link [JaragonCR]
+* feat(karaoke): scaffold karaoke + karaoke-fetcher containers [JaragonCR]
+
 # v4.7.0
 ## (2026-05-02)
 
