@@ -37,7 +37,7 @@ These options only have an effect on multi-room behavior:
 | SOUND_GROUP_NAME        | Group name — devices with the same name sync together. Different names form independent groups on the same network.                                        | Any valid string.                                     | `default` |
 | SOUND_GROUP_LATENCY     | Group-wide Snapcast playback buffer in ms. Increase if clients stutter.                                                                                    | Time in milliseconds. Example: `600`                  | `400`     |
 | SOUND_MULTIROOM_MASTER  | Override master IP — skips mDNS discovery. Use when mDNS is blocked by VLANs or managed switches.                                                        | An IPv4 formatted IP address. Example: `192.168.1.10` | ---       |
-| SOUND_MULTIROOM_LATENCY | Per-device latency fine-tuning. Used to compensate for DAC or speaker hardware latency.                                                                    | Time in milliseconds. Example: `300`                  | ---       |
+| SOUND_MULTIROOM_LATENCY | Per-device latency offset for remote clients only. Overrides the 400 ms default applied to devices that are not the group master. Has no effect on the master device, which always uses 150 ms. | Time in milliseconds. Example: `400` | `400` (remote clients) |
 
 ## Plugins
 

@@ -137,11 +137,20 @@ If speakers are noticeably out of sync, increase the group buffer:
 SOUND_GROUP_LATENCY = 600   # milliseconds (default: 400)
 ```
 
-For per-device fine-tuning (e.g. a device with a slow DAC):
+For per-device fine-tuning on remote clients (e.g. a device with a slow DAC):
 
 ```
-SOUND_MULTIROOM_LATENCY = 100   # milliseconds, added on top of group latency
+SOUND_MULTIROOM_LATENCY = 400   # milliseconds; only applies to remote clients (default: 400)
 ```
+
+IoTSound automatically picks the right latency default based on election result:
+
+| Role at startup | `--latency` passed to snapclient |
+|---|---|
+| Master + client (owns snapserver) | 150 ms — loopback path, no network jitter |
+| Remote client only | 400 ms (or `SOUND_MULTIROOM_LATENCY` if set) |
+
+`SOUND_MULTIROOM_LATENCY` only overrides the remote-client default. It has no effect on the master device.
 
 ---
 
