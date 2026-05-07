@@ -134,7 +134,7 @@ This pins all snapclients to the specified IP and bypasses mDNS entirely.
 If speakers are noticeably out of sync, increase the group buffer:
 
 ```
-SOUND_GROUP_LATENCY = 600   # milliseconds (default: 400)
+SOUND_GROUP_LATENCY = 600   # milliseconds (default: 750)
 ```
 
 For per-device fine-tuning on remote clients (e.g. a device with a slow DAC):

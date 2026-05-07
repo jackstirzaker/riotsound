@@ -114,7 +114,12 @@ Streaming audio to a device works fine but other devices on the network don't sy
 
 Multi-room is enabled by default in all device types. Ensure your device is properly configured. You can see the list of default modes of operation [here](device-support).
 
-If your device is properly configured and still can't get multi-room to work try power cycling the `master server` device. Devices might have missed the event broadcast where a device announces itself as a new `master server`, by rebooting it we force the device to send them again.
+IoTSound uses mDNS (Bonjour) for master discovery — client devices poll for the `_snapcast._tcp` advertisement every 30 seconds. If a client doesn't pick up the master within a minute of audio starting, check the following:
+
+- **Same subnet** — mDNS is link-local and will not cross VLANs or subnet boundaries. All IoTSound devices must be on the same IP subnet. If they are on different subnets, set `SOUND_MULTIROOM_MASTER` to the master device's IP to bypass discovery.
+- **Inter-band multicast** — If devices are on different WiFi bands (e.g. one on 2.4 GHz, another on 5 GHz/WiFi 6), your router may not forward multicast between them. Check your router for a "multicast between bands" or "band bridge" setting, or move all IoTSound devices to the same band.
+- **WPA3 / PMF on Pi 3** — See the note under [Audio cuts or is very stuttery](#audio-cuts-or-is-very-stuttery) above.
+- **Manual override** — Set `SOUND_MULTIROOM_MASTER=<master-ip>` on client devices to skip mDNS entirely while you diagnose the network issue.
 
 ### No audio on HDMI output on Raspberry Pi 4
 
