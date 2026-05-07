@@ -18,6 +18,16 @@ until (exec 3<>/dev/tcp/localhost/4317) 2>/dev/null; do
 done
 echo "[librespot] PulseAudio ready"
 
+# Wait for a routable network interface before starting — on slow Pi 3 boards
+# wlan0 can be assigned an IP after PulseAudio is ready. go-librespot's built-in
+# mDNS responder binds at startup; if no real interface exists yet it falls back
+# to loopback and becomes invisible to Spotify Connect on the LAN.
+until ip -4 addr show scope global | grep -q inet; do
+  echo "[librespot] Waiting for network interface..."
+  sleep 2
+done
+echo "[librespot] Network ready"
+
 SOUND_DEVICE_NAME=${SOUND_DEVICE_NAME:-"balenaSound Spotify $(echo "$BALENA_DEVICE_UUID" | cut -c -4)"}
 SOUND_DEVICE_NAME=${SOUND_DEVICE_NAME}
 SOUND_SPOTIFY_BITRATE=$(printf '%s' "${SOUND_SPOTIFY_BITRATE:-160}" | tr -cd '0-9'); SOUND_SPOTIFY_BITRATE=${SOUND_SPOTIFY_BITRATE:-160}
