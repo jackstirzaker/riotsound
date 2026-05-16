@@ -35,7 +35,7 @@ This document records what was manually validated for the v5.0 release and calls
 | Pi 4 master + Pi 3 B/B+ client | ✔ Confirmed working | mDNS discovery, dynamic election, audio sync |
 | Volume sync across devices | ✔ Confirmed working | |
 | 30s demotion after stream stops | ✔ Confirmed working | |
-| Role-aware latency (150ms master / 400ms client) | ✔ Confirmed working | |
+| Per-device snapclient latency | ⚠ Needs hardware calibration | Current default is 400ms for every snapclient; tune `SOUND_MULTIROOM_LATENCY` per device. |
 | 2+ clients simultaneously | ✘ Not tested | Only 1 client available during validation |
 | Pi 3 B/B+ as master | ✘ Not tested | Known BT/WiFi interference risk; Pi 4 preferred for master |
 | Multiple groups on the same network | ✘ Not tested | |

@@ -6,6 +6,14 @@ Community contributions have been a staple of this open source project since its
 
 ![](https://raw.githubusercontent.com/iotsound/iotsound/master/docs/images/arch-overview.png)
 
+For AI-assisted debugging or feature design, start with the compact architecture pack:
+
+- [AI Architecture Index](architecture/ai-index.md)
+- [System Map](architecture/system-map.md)
+- [Runtime States](architecture/runtime-states.md)
+- [Ownership Map](architecture/ownership-map.md)
+- [AI Debugging / Feature Prompt](architecture/ai-prompt.md)
+
 IoTSound services can be divided in three groups:
 
 - Sound core: `sound-supervisor` and `audio`.
@@ -69,7 +77,7 @@ Creation and configuration scripts for these virtual sinks are located at `core/
 
 ![](https://raw.githubusercontent.com/iotsound/iotsound/master/docs/images/arch-standalone.png)
 
-Standalone mode is easy to understand. You just pipe ` balena-sound.input` to `balena-sound.output` and that's it. Audio coming in from any plugin will find it's way to the selected output. If this was the only mode, we could simplify the setup and use a single sink. Having the two layers however is important for the multiroom mode which is more complicated.
+Standalone mode is easy to understand. You route `balena-sound.input` to `balena-sound.output` and that's it. Audio coming in from any plugin finds its way to the selected output. If this was the only mode, we could simplify the setup and use a single sink. Having the two layers however is important for the multiroom mode which is more complicated.
 
 ### Multiroom
 
@@ -77,9 +85,9 @@ Standalone mode is easy to understand. You just pipe ` balena-sound.input` to `b
 
 Multiroom feature relies on `snapcast` to broadcast the audio to multiple devices. Snapcast has two binaries working alongside: server and client.
 
-Snapcast server can receive audio from an ALSA stream, so we create an additional sink (`snapcast` sink) that routes audio from `balena-sound.input` and configure snapcast to grab the audio from the sink monitor. The server will then use TCP packets to broadcast audio to all clients that are connected to it, whether they run in the same device or others. Note that the audio is "exiting" the `audio` block and no longer under PulseAudio's control.
+IoTSound creates an additional PipeWire null sink named `snapcast`. In multiroom roles, `balena-sound.input` is routed to that sink. The `multiroom-server` service records PCM from `snapcast.monitor` with `pacat`, writes it to `/tmp/snapserver-audio`, and Snapserver broadcasts that stream over TCP to connected clients. Clients can run on the same device as the server or on separate devices.
 
-Snapcast client receives the audio from the server and sends it back into the `audio` block, in particular to `balena-sound.output` sink which will in turn send the audio to whatever output was selected by the user.
+Snapcast client receives the audio from the server and sends it back into the `audio` block, in particular to the `balena-sound.output` sink which will in turn send the audio to whatever output was selected by the user. A master device normally plays through its own local `snapclient`; a `disabled` standalone device bypasses Snapcast entirely.
 
 This setup allows us to decouple the multiroom feature from the `audio` block while retaining it's advantages.
 

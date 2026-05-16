@@ -5,6 +5,9 @@ volumes:
   librespot-config:
   karaoke-media:
   karaoke-data:
+  # Private D-Bus socket shared between sound-supervisor (avahi-daemon host)
+  # and any container that needs avahi (librespot for Spotify Connect zeroconf).
+  iotsound-dbus:
 
 services:
   # Core services
@@ -29,6 +32,8 @@ services:
       io.balena.features.balena-api: "1"
       io.balena.features.supervisor-api: "1"
       io.balena.features.dbus: "1"
+    volumes:
+      - iotsound-dbus:/run/iotsound-dbus
 
   multiroom-server:
     build: ./core/multiroom/server
@@ -71,8 +76,14 @@ services:
     restart: on-failure
     network_mode: host
     privileged: true
+    depends_on:
+      - sound-supervisor
+    environment:
+      - DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/iotsound-dbus/socket
     labels:
       io.balena.features.dbus: "1"
+    volumes:
+      - iotsound-dbus:/run/iotsound-dbus
 
   librespot:
     build: ./plugins/librespot
@@ -81,8 +92,12 @@ services:
     network_mode: host
     depends_on:
       - audio
+      - sound-supervisor
+    environment:
+      - DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/iotsound-dbus/socket
     volumes:
       - librespot-config:/config
+      - iotsound-dbus:/run/iotsound-dbus
    
   hostname:
    build: ./core/hostname

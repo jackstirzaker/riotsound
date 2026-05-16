@@ -1,23 +1,17 @@
+import * as net from 'net'
 import axios from 'axios'
 import { restartBalenaService } from './utils'
 import AvahiAdvertiser from './AvahiAdvertiser'
-import { browseSnapcast } from './AvahiBrowser'
+import { SnapcastBrowser, type SnapcastService } from './AvahiBrowser'
 
 const SNAPSERVER_URL = 'http://localhost:1780/jsonrpc'
 const POLL_INTERVAL_MS = 5000
-const DISCOVERY_INTERVAL_MS = 15000
-const RESTART_COOLDOWN_MS = 20000
-
-export interface SnapserverBufferStatus {
-  configured: number
-  standalone: number
-  effective: number
-  mode: 'standalone' | 'multiroom'
-}
+// 3× the 30s demotion timer — safety net for masters that crash without sending a goodbye
+const MASTER_TTL_MS = 90000
+// Probe every 30s: 3 consecutive failures → TTL fires at 90s.
+const TTL_CHECK_INTERVAL_MS = 30000
 
 export interface MonitorConfig {
-  bufferMs: number
-  standaloneBufferMs: number
   groupName: string | undefined
   deviceUuid: string
   groupLatency: number
@@ -28,19 +22,15 @@ export interface MonitorConfig {
 }
 
 export default class SnapserverMonitor {
-  private configuredBufferMs: number
-  private standaloneBufferMs: number
-  private effectiveBufferMs: number
-  private previousRemoteCount: number = 0
-  private cooldownUntil: number = 0
   private pollInterval: NodeJS.Timeout | null = null
-  private discoveryInterval: NodeJS.Timeout | null = null
 
   private advertiser = new AvahiAdvertiser()
+  private browser: SnapcastBrowser | null = null
+  private ttlTimer: NodeJS.Timeout | null = null
   private serverWasUp = false
   private cachedGroupId: string | null = null
   private discoveredMasterIp: string | null = null
-  private discovering = false
+  private discoveredMasterLastSeen: number = 0
 
   private readonly groupName: string | undefined
   private readonly deviceUuid: string
@@ -51,9 +41,6 @@ export default class SnapserverMonitor {
   private isMaster: boolean
 
   constructor(cfg: MonitorConfig) {
-    this.configuredBufferMs = cfg.bufferMs
-    this.standaloneBufferMs = cfg.standaloneBufferMs
-    this.effectiveBufferMs = this.standaloneBufferMs
     this.groupName = cfg.groupName
     this.deviceUuid = cfg.deviceUuid
     this.groupLatency = cfg.groupLatency
@@ -64,23 +51,6 @@ export default class SnapserverMonitor {
   }
 
   // --- Public API ---
-
-  getStatus(): SnapserverBufferStatus {
-    return {
-      configured: this.configuredBufferMs,
-      standalone: this.standaloneBufferMs,
-      effective: this.effectiveBufferMs,
-      mode: this.effectiveBufferMs === this.standaloneBufferMs ? 'standalone' : 'multiroom',
-    }
-  }
-
-  setConfiguredBuffer(ms: number): void {
-    this.configuredBufferMs = Math.max(50, Math.min(ms, 2000))
-    if (this.previousRemoteCount > 0) {
-      this.effectiveBufferMs = this.configuredBufferMs
-      this.triggerRestart('multiroom')
-    }
-  }
 
   // Returns master IP: env override → mDNS discovered → own IP fallback.
   getMasterIp(): string {
@@ -112,33 +82,31 @@ export default class SnapserverMonitor {
   }
 
   start(): void {
-    // Poll snapserver HTTP API only if this device is the elected master.
-    // Client devices run discovery only so they can find the master IP.
-    // Masters never browse: two Bonjour instances bound to 0.0.0.0:5353 on
-    // the same host interfere and prevent the advertiser from receiving queries.
     if (this.isMaster) {
       this.pollInterval = setInterval(() => this.poll(), POLL_INTERVAL_MS)
     } else {
-      this.discoveryInterval = setInterval(() => this.discover(), DISCOVERY_INTERVAL_MS)
-      this.discover().catch(() => {})
+      this.startBrowsing()
     }
   }
 
   stop(): void {
     if (this.pollInterval) { clearInterval(this.pollInterval); this.pollInterval = null }
-    if (this.discoveryInterval) { clearInterval(this.discoveryInterval); this.discoveryInterval = null }
+    this.stopBrowsing()
     this.advertiser.unpublish()
   }
 
-  // Called when election result changes at runtime (e.g. play-detect promotes client → master).
+  // Called when election result changes at runtime.
   setMaster(isMaster: boolean): void {
     if (this.isMaster === isMaster) return
     this.isMaster = isMaster
     console.log(`[snapserver-monitor] Role transition → ${isMaster ? 'master' : 'client'}`)
     if (isMaster) {
-      // Stop browsing — masters advertise, they don't need to discover.
-      // Two Bonjour instances on 0.0.0.0:5353 interfere; only the advertiser runs.
-      if (this.discoveryInterval) { clearInterval(this.discoveryInterval); this.discoveryInterval = null }
+      this.stopBrowsing()
+      // Clear stale remote IP so getMasterIp() falls through to localIp.
+      // Without this, the watchdog sees no IP change and stays connected to
+      // the previous master instead of joining the now-local snapserver.
+      this.discoveredMasterIp = null
+      this.discoveredMasterLastSeen = 0
       if (!this.pollInterval) {
         this.pollInterval = setInterval(() => this.poll(), POLL_INTERVAL_MS)
       }
@@ -149,71 +117,101 @@ export default class SnapserverMonitor {
         this.advertiser.unpublish()
         this.serverWasUp = false
       }
-      // Start browsing to find the new master.
-      if (!this.discoveryInterval) {
-        this.discoveryInterval = setInterval(() => this.discover(), DISCOVERY_INTERVAL_MS)
-        this.discover().catch(() => {})
-      }
+      this.startBrowsing()
     }
   }
 
   // --- Private ---
 
-  private async poll(): Promise<void> {
-    if (Date.now() < this.cooldownUntil) return
+  private startBrowsing(): void {
+    if (this.browser) return
+    this.browser = new SnapcastBrowser(
+      (svc) => this.onMasterUp(svc),
+      (svc) => this.onMasterDown(svc),
+      this.groupName
+    )
+    this.browser.start()
+    this.ttlTimer = setInterval(() => this.checkMasterTtl(), TTL_CHECK_INTERVAL_MS)
+  }
 
+  private stopBrowsing(): void {
+    if (this.ttlTimer) { clearInterval(this.ttlTimer); this.ttlTimer = null }
+    if (this.browser) { this.browser.stop(); this.browser = null }
+  }
+
+  private onMasterUp(svc: SnapcastService): void {
+    if (svc.ip !== this.discoveredMasterIp) {
+      console.log(`[snapserver-monitor] Master UP: ${this.discoveredMasterIp ?? '(none)'} → ${svc.ip}`)
+      this.discoveredMasterIp = svc.ip
+    }
+    this.discoveredMasterLastSeen = Date.now()
+  }
+
+  private onMasterDown(svc: SnapcastService): void {
+    if (svc.ip === this.discoveredMasterIp) {
+      console.log(`[snapserver-monitor] Master DOWN (goodbye): clearing ${this.discoveredMasterIp}`)
+      this.discoveredMasterIp = null
+      this.discoveredMasterLastSeen = 0
+      this.restartClientForNewMaster('goodbye')
+    }
+  }
+
+  private async checkMasterTtl(): Promise<void> {
+    if (!this.discoveredMasterIp) return
+
+    // Probe port 1704 every 30s. If the master is alive, refresh lastSeen so
+    // the TTL never fires during an active session. Three consecutive failures
+    // (30 + 60 + 90s) are required before the restart triggers at 90s.
+    const alive = await this.probeMasterSnapserver()
+    if (alive) {
+      this.discoveredMasterLastSeen = Date.now()
+      return
+    }
+
+    if (Date.now() - this.discoveredMasterLastSeen <= MASTER_TTL_MS) return
+
+    console.log(`[snapserver-monitor] Master TTL expired (${MASTER_TTL_MS}ms) — clearing ${this.discoveredMasterIp}`)
+    this.discoveredMasterIp = null
+    this.discoveredMasterLastSeen = 0
+    this.restartClientForNewMaster('ttl')
+  }
+
+  private probeMasterSnapserver(): Promise<boolean> {
+    const ip = this.discoveredMasterIp!
+    return new Promise((resolve) => {
+      const sock = new net.Socket()
+      const timer = setTimeout(() => { sock.destroy(); resolve(false) }, 2000)
+      sock.connect(1704, ip, () => { clearTimeout(timer); sock.destroy(); resolve(true) })
+      sock.on('error', () => { clearTimeout(timer); resolve(false) })
+    })
+  }
+
+  // Restart multiroom-client so it stops retrying a dead server and re-enters
+  // the client-ready wait loop. Skipped if this device is already master.
+  private restartClientForNewMaster(reason: 'goodbye' | 'ttl'): void {
+    if (this.isMaster) return
+    console.log(`[snapserver-monitor] Master gone (${reason}) — restarting multiroom-client`)
+    restartBalenaService('multiroom-client').catch((err: Error) =>
+      console.log(`[snapserver-monitor] Failed to restart multiroom-client: ${err.message}`)
+    )
+  }
+
+  private async poll(): Promise<void> {
     try {
       const status = await this.fetchServerStatus()
-
-      // Cache group ID for volume control
       this.cachedGroupId = status.server.groups[0]?.id ?? null
 
-      // Advertise as soon as the server first comes up
       if (!this.serverWasUp) {
         this.serverWasUp = true
         this.startAdvertising()
       }
-
-      const allClients: any[] = status.server.groups.flatMap((g: any) => g.clients)
-      const connectedCount = allClients.filter((c: any) => c.connected).length
-      const remoteCount = Math.max(0, connectedCount - 1)
-
-      if (this.previousRemoteCount === 0 && remoteCount > 0) {
-        if (this.effectiveBufferMs !== this.configuredBufferMs) {
-          console.log(`[snapserver-monitor] Remote client joined (connected=${connectedCount}). Buffer: standalone → ${this.configuredBufferMs}ms`)
-          this.effectiveBufferMs = this.configuredBufferMs
-          this.triggerRestart('multiroom')
-        } else {
-          console.log(`[snapserver-monitor] Remote client joined (connected=${connectedCount}). Buffer already ${this.effectiveBufferMs}ms`)
-        }
-      } else if (this.previousRemoteCount > 0 && remoteCount === 0) {
-        console.log(`[snapserver-monitor] Last remote client left. Keeping ${this.effectiveBufferMs}ms buffer until idle demotion`)
-      }
-
-      this.previousRemoteCount = remoteCount
     } catch {
-      // Server not reachable — normal at startup or after restart
       if (this.serverWasUp) {
         this.serverWasUp = false
         this.cachedGroupId = null
         this.advertiser.unpublish()
         console.log('[snapserver-monitor] Snapserver went down, advertisement unpublished')
       }
-    }
-  }
-
-  private async discover(): Promise<void> {
-    if (this.discovering) return
-    this.discovering = true
-    try {
-      const services = await browseSnapcast(this.groupName, 8000, this.localIp)
-      const newIp = services[0]?.ip ?? null
-      if (newIp !== this.discoveredMasterIp) {
-        console.log(`[snapserver-monitor] Master IP: ${this.discoveredMasterIp ?? '(none)'} → ${newIp ?? '(none)'}`)
-        this.discoveredMasterIp = newIp
-      }
-    } finally {
-      this.discovering = false
     }
   }
 
@@ -238,11 +236,5 @@ export default class SnapserverMonitor {
     return resp.data.result
   }
 
-  private triggerRestart(targetMode: 'standalone' | 'multiroom'): void {
-    this.previousRemoteCount = targetMode === 'multiroom' ? 1 : 0
-    this.cooldownUntil = Date.now() + RESTART_COOLDOWN_MS
-    restartBalenaService('multiroom-server').catch((err: Error) =>
-      console.log(`[snapserver-monitor] Failed to restart multiroom-server: ${err.message}`)
-    )
-  }
+
 }

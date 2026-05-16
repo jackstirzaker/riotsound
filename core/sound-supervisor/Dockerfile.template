@@ -16,9 +16,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pulseaudio-utils \
     curl \
     dbus \
+    avahi-daemon \
+    avahi-utils \
+    libavahi-client3 \
   && rm -rf /var/lib/apt/lists/*
 WORKDIR /usr/src
 COPY core/sound-supervisor/package*.json ./
 COPY --from=build /usr/src/build ./build
 RUN npm install --omit=dev
-CMD [ "node", "build/index.js" ]
+COPY core/sound-supervisor/entrypoint.sh /usr/src/entrypoint.sh
+COPY core/sound-supervisor/iotsound-dbus.conf /etc/dbus-1/iotsound-system.conf
+RUN chmod +x /usr/src/entrypoint.sh
+CMD [ "/usr/src/entrypoint.sh" ]

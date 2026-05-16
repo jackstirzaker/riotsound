@@ -17,13 +17,16 @@ Bluetooth / AirPlay / Spotify / UPnP
     PipeWire (audio block, TCP :4317)
      sink: balena-sound.input
             │
-            │  pacat (capture, 50ms latency)
+            ▼
+     sink: snapcast
+            │
+            │  pacat records snapcast.monitor
             ▼
     snapserver (port 1704)
             │
             │  TCP :1704 (Snapcast binary protocol, timestamped chunks)
             ▼
-    snapclient (on every device in the group)
+    snapclient (on every device in the group, including the master)
             │
             ▼
     balena-sound.output → speakers
@@ -131,35 +134,107 @@ This pins all snapclients to the specified IP and bypasses mDNS entirely.
 
 ### Latency tuning
 
-If speakers are noticeably out of sync, increase the group buffer:
+If speakers stutter together, increase the master Snapserver stream buffer:
 
 ```
-SOUND_GROUP_LATENCY = 600   # milliseconds (default: 750)
+SOUND_MULTIROOM_BUFFER_MS = 400   # milliseconds
 ```
 
-For per-device fine-tuning on remote clients (e.g. a device with a slow DAC):
+The server also protects this automatically for the master device: the effective stream buffer is at least `SOUND_MULTIROOM_LATENCY + 100`. If `SOUND_MULTIROOM_BUFFER_MS=250` and the master has `SOUND_MULTIROOM_LATENCY=500`, the server runs with a `600ms` stream buffer. If a remote client needs a larger per-device latency than the master, set the master's requested `SOUND_MULTIROOM_BUFFER_MS` high enough for that remote client too.
+
+If only the master capture path underruns, increase the capture buffer:
 
 ```
-SOUND_MULTIROOM_LATENCY = 400   # milliseconds; only applies to remote clients (default: 400)
+SOUND_MULTIROOM_CAPTURE_MS = 100   # milliseconds
 ```
 
-IoTSound automatically picks the right latency default based on election result:
+If one client pops, crackles, or drops out locally, increase the snapclient-to-PulseAudio buffer:
 
-| Role at startup | `--latency` passed to snapclient |
+```
+SOUND_MULTIROOM_PA_LATENCY_MS = 200   # milliseconds
+```
+
+For per-device sync tuning on any device running `snapclient` (including the master device's local client):
+
+```
+SOUND_MULTIROOM_LATENCY = 400   # milliseconds (default: 400; negative values allowed)
+```
+
+`SOUND_MULTIROOM_LATENCY` is passed to snapclient as `--latency`. This is best understood as **hardware/output-path latency compensation**, not a simple "add this much delay" control. Use it to describe how slow that device's local PCM/output path already is.
+
+Current code applies the value to every running `snapclient` on that device:
+
+| Runtime path | `--latency` passed to snapclient |
 |---|---|
-| Master + client (owns snapserver) | 150 ms — loopback path, no network jitter |
-| Remote client only | 400 ms (or `SOUND_MULTIROOM_LATENCY` if set) |
+| Master + local client | `SOUND_MULTIROOM_LATENCY` or `400` ms |
+| Remote client | `SOUND_MULTIROOM_LATENCY` or `400` ms |
 
-`SOUND_MULTIROOM_LATENCY` only overrides the remote-client default. It has no effect on the master device.
+Use the same value on identical devices and output paths. Use different values only to compensate for known device-specific delay such as HDMI/mailbox output, USB DAC buffering, Bluetooth paths, or a slow ALSA/PipeWire sink.
+
+Direction of adjustment:
+
+- If a device is consistently late because its own output path is slow, raise `SOUND_MULTIROOM_LATENCY` on that device.
+- If a device is consistently early, lower that device's value.
+- Avoid solving a slow client by adding a huge value to the faster client. That increases delay from reality and can exceed the client's playback buffer.
+- If a client goes silent or unstable when the latency value gets large, the value is likely larger than the available Snapcast buffer headroom.
+
+#### Practical workflow
+
+1. Put both devices on stable buffers first:
+
+```
+SOUND_MULTIROOM_PA_LATENCY_MS = 200
+SOUND_MULTIROOM_BUFFER_MS = 250-400
+SOUND_MULTIROOM_CAPTURE_MS = 50-100
+```
+
+2. Start with `SOUND_MULTIROOM_LATENCY` equal on devices with similar hardware.
+3. If one device is late every time, identify its hardware output sink with:
+
+```
+pactl list short sinks
+```
+
+HDMI/mailbox sinks can be hundreds of milliseconds slower than I2S/USB/analog outputs.
+4. Tune the late hardware path in 50-100 ms steps, restarting `multiroom-client` after each change.
+
+#### Example: Pi4 source to Pi3 HDMI client
+
+In one live fleet, Pi4 was the master/source and Pi3 was a remote client. Audio came back when Pi4 was reduced from a large `SOUND_MULTIROOM_LATENCY=900` to a lower value, but the Pi3 still sounded about 500 ms late. The Pi3 output sink was:
+
+```
+alsa_output.platform-3f00b840.mailbox.stereo-fallback
+```
+
+That is the Raspberry Pi HDMI/mailbox path, which can add large hardware latency. In that case, prefer compensating Pi3 instead of delaying Pi4:
+
+```
+# Pi4: fast/local output path
+SOUND_MULTIROOM_LATENCY = 0-200
+SOUND_MULTIROOM_PA_LATENCY_MS = 200
+
+# Pi3: slow HDMI/mailbox output path
+SOUND_MULTIROOM_LATENCY = 500
+SOUND_MULTIROOM_PA_LATENCY_MS = 200
+```
+
+Then adjust Pi3:
+
+- Pi3 still late: try `600`.
+- Pi3 now early: try `400`.
+- Either device stutters or goes silent: reduce the offset or increase `SOUND_MULTIROOM_PA_LATENCY_MS`.
+
+These values are starting points, not fleet defaults. They vary by Raspberry Pi model, DAC/HDMI path, CPU load, network quality, and which device is master. Changing the value from the web UI restarts `multiroom-client` so the running `snapclient` uses the new offset.
 
 ---
 
 ## Troubleshooting
 
 **Karaoke or Spotify appears to play but no speakers output**
-- Check `sound-supervisor` first. If logs show `PulseAudioWrapper pactl check failed ... (20/20)` and then no successful connection, supervisor may have started before PulseAudio was ready and failed before wiring play handlers. `/internal/play` can return `{"received":true}` while `/multiroom/active` stays false. Fix/verify `core/sound-supervisor/src/index.ts` and `PulseAudioWrapper.ts` so Pulse connects in the background and retries indefinitely.
-- Check `multiroom-client` logs. If snapclient exits with `Exception: No audio player support for: pulse` or `PCM device "default" not found`, the Snapcast client image does not support the configured PulseAudio player/output. Rebuild/fix the client image before debugging routing further.
-- Check networking. The Snapcast master IP advertised by mDNS must be reachable from the `multiroom-client` container. If the client is isolated on its own Docker network, it may discover an address that the container cannot route to. Use host networking or a deliberate bridge/port design so clients can reach TCP `1704` on the advertised master.
+- Check `sound-supervisor` first. `/internal/play` should trigger AUTO promotion, `/multiroom/active` should become `true` on the master, and `/multiroom/master` should return a usable IPv4 address.
+- Check `multiroom-client` logs. It should wait for `/multiroom/client-ready`, start `snapclient --player pulse`, and target the current `/multiroom/master` address.
+- Check `multiroom-server` logs. It should wait for `snapcast.monitor`, start `pacat`, and keep `snapserver` alive on TCP `1704`.
+- Check networking. The Snapcast master IP advertised by mDNS must be reachable from each `multiroom-client` container on TCP `1704`.
 
 **Devices don't sync after streaming starts**
 - Wait up to 10 seconds — mDNS discovery can take a moment on first connection

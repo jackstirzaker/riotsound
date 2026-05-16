@@ -21,6 +21,15 @@ until nc -z localhost 4317 2>/dev/null; do
   [ "$_tries" -ge 20 ] && break
 done
 
+# Wait for avahi-daemon sentinel (written by sound-supervisor entrypoint).
+if [ -n "$DBUS_SYSTEM_BUS_ADDRESS" ]; then
+  until [ -f /run/iotsound-dbus/avahi-ready ]; do
+    echo "Waiting for avahi-daemon..."
+    sleep 1
+  done
+  echo "avahi-daemon ready"
+fi
+
 echo "Starting Shairport Sync"
 exec shairport-sync \
   --name="$SOUND_DEVICE_NAME" \

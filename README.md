@@ -88,10 +88,11 @@ See [docs/MULTIROOM.md](docs/MULTIROOM.md) for a full explanation of roles, grou
 |---|---|---|
 | `SOUND_MULTIROOM_ROLE` | `auto` (play-triggered master), `host` (always master), `join` (always client), `disabled` (standalone) | `auto` |
 | `SOUND_GROUP_NAME` | Multiroom group — devices with the same name sync together | `default` |
-| `SOUND_GROUP_LATENCY` | Group-wide Snapcast buffer in ms — increase if clients stutter | `750` |
-| `SOUND_STANDALONE_BUFFER_MS` | Snapcast buffer before remote clients join | `150` |
-| `SOUND_MULTIROOM_BUFFER_MS` | Snapcast buffer when remote clients are connected | `400` |
-| `SOUND_MULTIROOM_LATENCY` | Per-device latency offset for remote clients only (ms) — has no effect on the master | `400` |
+| `SOUND_GROUP_LATENCY` | Group latency advertised in mDNS TXT records; informational for discovery/UI | `750` |
+| `SOUND_MULTIROOM_BUFFER_MS` | Snapserver stream buffer in ms — increase if all Snapcast clients stutter | `400` |
+| `SOUND_MULTIROOM_CAPTURE_MS` | Master-side pacat capture latency in ms | `50` |
+| `SOUND_MULTIROOM_PA_LATENCY_MS` | PulseAudio sink-input buffer for snapclient output in ms | `100` |
+| `SOUND_MULTIROOM_LATENCY` | Per-device snapclient latency offset in ms; applies to any running snapclient, including the master-local client. Use a higher value on earlier devices or a lower/negative value on later devices. | `400` |
 | `SOUND_MULTIROOM_MASTER` | Override master IP — skips mDNS discovery (for networks where mDNS is blocked) | unset |
 
 #### Multiroom roles
@@ -103,7 +104,7 @@ See [docs/MULTIROOM.md](docs/MULTIROOM.md) for a full explanation of roles, grou
 | `join` | ❌ Stopped (device invisible to streaming apps) | ✅ | ❌ Never |
 | `disabled` | ✅ | ❌ Standalone only | ❌ Never |
 
-**Standalone mode** — set `SOUND_MULTIROOM_ROLE=disabled` for devices that should play independently.
+**Standalone mode** — set `SOUND_MULTIROOM_ROLE=disabled` for devices that should play independently. Disabled devices route `balena-sound.input` directly to `balena-sound.output` and do not use Snapcast.
 
 **Groups** — devices with the same `SOUND_GROUP_NAME` sync together. Different group names form independent groups that can play different audio simultaneously on the same network.
 

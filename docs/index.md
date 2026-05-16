@@ -17,3 +17,8 @@ If you're new to IoTSound, start with our [Getting Started](01-getting-started.m
 - [Support](07-support.md)
 - [FAQ](08-FAQ.md)
 - [Architecture](ARCHITECTURE.md)
+- [AI Architecture Index](architecture/ai-index.md)
+- [System Map](architecture/system-map.md)
+- [Runtime States](architecture/runtime-states.md)
+- [Ownership Map](architecture/ownership-map.md)
+- [AI Debugging / Feature Prompt](architecture/ai-prompt.md)

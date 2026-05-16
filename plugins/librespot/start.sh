@@ -28,6 +28,17 @@ until ip -4 addr show scope global | grep -q inet; do
 done
 echo "[librespot] Network ready"
 
+# Wait for avahi-daemon (sentinel written by sound-supervisor entrypoint).
+# avahi-daemon --check reads a local PID file so it cannot cross container
+# boundaries — we use a sentinel file on the shared iotsound-dbus volume instead.
+if [ -n "$DBUS_SYSTEM_BUS_ADDRESS" ]; then
+  until [ -f /run/iotsound-dbus/avahi-ready ]; do
+    echo "[librespot] Waiting for avahi-daemon..."
+    sleep 1
+  done
+  echo "[librespot] avahi-daemon ready"
+fi
+
 SOUND_DEVICE_NAME=${SOUND_DEVICE_NAME:-"balenaSound Spotify $(echo "$BALENA_DEVICE_UUID" | cut -c -4)"}
 SOUND_DEVICE_NAME=${SOUND_DEVICE_NAME}
 SOUND_SPOTIFY_BITRATE=$(printf '%s' "${SOUND_SPOTIFY_BITRATE:-160}" | tr -cd '0-9'); SOUND_SPOTIFY_BITRATE=${SOUND_SPOTIFY_BITRATE:-160}
