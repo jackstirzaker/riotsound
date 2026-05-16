@@ -1,4 +1,47 @@
 - commits:
+    - subject: "fix(multiroom): harden discovery and latency calibration"
+      hash: 1aad65c5ada3a923333dff5e0f107f37149950c9
+      body: >
+        Summary:
+
+        - Move multiroom discovery to a persistent Avahi-backed browser with
+        IPv4 filtering, readiness signaling, and TTL probing so clients recover
+        from stale or disappearing masters.
+
+        - Harden snapclient lifecycle handling: wait for PulseAudio with pactl,
+        respawn on master IP changes, survive watchdog wait paths, and restart
+        clients when a known master sends goodbye.
+
+        - Add hardware calibration levers for Snapcast: fixed snapserver buffer,
+        pacat capture latency, per-device snapclient latency, and
+        snapclient-to-PulseAudio buffer tuning.
+
+        - Expose per-device playback latency in the web UI and persist latency
+        changes so the running multiroom-client restarts with the selected
+        value.
+
+        - Route AirPlay and librespot through the shared Avahi daemon so mDNS
+        users coexist instead of competing for ownership.
+
+        - Add AI-efficient architecture docs, ownership maps, runtime-state
+        notes, mDNS notes, and practical Pi3/Pi4 latency tuning guidance.
+
+
+        Release rationale:
+
+        - This is a patch because it hardens and calibrates existing multiroom
+        behavior rather than adding a standalone product capability.
+
+        - The new controls are remediation/debugging levers for existing sync
+        and recovery paths.
+      footer:
+        Change-type: patch
+        change-type: patch
+      author: JaragonCR
+  version: 5.0.1
+  title: ""
+  date: 2026-05-16T18:04:39.457Z
+- commits:
     - subject: "docs(readme): hard pass for v5.0 — remove completed version tables and
         stale content"
       hash: 760ba8d10f41af7156aac59a79a6a6a0d89d1015

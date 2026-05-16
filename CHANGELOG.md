@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/).
 Releases are automated by [Versionist](https://github.com/product-os/versionist).
 
+# v5.0.1
+## (2026-05-16)
+
+* fix(multiroom): harden discovery and latency calibration [JaragonCR]
+
 # v5.0.0
 ## (2026-05-07)
 
