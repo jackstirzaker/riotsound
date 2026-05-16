@@ -40,8 +40,6 @@ async function init() {
   soundAPI.setStopHandler(handleStopDetect)
 
   monitor = new SnapserverMonitor({
-    bufferMs: constants.multiroomBufferMs,
-    standaloneBufferMs: constants.standaloneBufferMs,
     groupName: constants.groupName,
     deviceUuid,
     groupLatency: constants.groupLatency,
@@ -60,6 +58,8 @@ async function init() {
 
 // WirePlumber Lua fires POST /internal/play when a stream links to balena-sound.input.
 audioBlock.on('play', async (sink: any) => {
+  // PipeWire emits a synthetic stream with name '-' during graph init — skip it.
+  if (!sink?.name || sink.name === '-') return
   if (constants.debug) {
     console.log('[event] Audio block: play', sink)
   }
@@ -86,7 +86,7 @@ export async function handlePlayDetect(): Promise<void> {
   if (config.isElectedMaster()) return
 
   console.log('[play-detect] AUTO device — optimistically promoting to master')
-  config.applyElectionResult('master')
+  config.applyElectionResult('master', Boolean(monitor.getDiscoveredMasterIp()))
   monitor.setMaster(true)
 
   // Start a fallback timer. If no snapclient connects within MULTIROOM_FALLBACK_MS,

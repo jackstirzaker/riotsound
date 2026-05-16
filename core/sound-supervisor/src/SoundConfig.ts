@@ -78,11 +78,13 @@ export default class SoundConfig {
   }
 
   // Called after promotion. Starts the full multiroom stack for the elected role.
-  applyElectionResult(elected: ElectedRole): void {
+  applyElectionResult(elected: ElectedRole, _hadRemoteMaster = false): void {
     this.electedRole = elected
     if (elected === 'master') {
-      console.log('[election] Promoted to master — starting multiroom-server + multiroom-client')
       this.safeService(startBalenaService, 'multiroom-server')
+      // multiroom-client stays running; its watchdog detects the master IP
+      // change and respawns snapclient in-place within 5s.
+      console.log('[election] Promoted to master — starting multiroom-server + multiroom-client')
       this.safeService(startBalenaService, 'multiroom-client')
     } else {
       console.log('[election] Elected client — starting multiroom-client, stopping multiroom-server')

@@ -11,18 +11,6 @@ while ! curl --silent --output /dev/null "$SOUND_SUPERVISOR/ping"; do sleep 5; e
 # Get mode from sound supervisor (determines whether to start snapclient at all).
 MODE=$(curl --silent "$SOUND_SUPERVISOR/mode" || true)
 
-# --- ENV VARS ---
-# Latency defaults differ by role:
-#   master+client (local snapserver): 150ms -- loopback path, no network jitter
-#   remote client only: 400ms -- compensates for Pi hardware + network delay
-# SOUND_MULTIROOM_LATENCY overrides the remote-client default only.
-IS_MASTER=$(curl -sf "$SOUND_SUPERVISOR/multiroom/active" 2>/dev/null | grep -c '"active":true' || echo 0)
-if [[ "$IS_MASTER" == "1" ]]; then
-  LATENCY="--latency 150"
-else
-  LATENCY="--latency ${SOUND_MULTIROOM_LATENCY:-400}"
-fi
-
 # Wait until PulseAudio is actually ready to serve connections.
 # pactl info speaks the PA protocol — it only succeeds once pipewire-pulse
 # is fully initialised, unlike /dev/tcp which passes on stale sockets.
@@ -64,35 +52,69 @@ if [[ -z "$SNAPSERVER" ]]; then
   echo "[snapclient] ERROR: no snapcast target available"
   exit 1
 fi
+
+# Snapcast hostID is identity, not display name. It must be unique per device;
+# using SOUND_DEVICE_NAME here breaks fleets where the name is set globally.
+if [[ -n "$BALENA_DEVICE_UUID" ]]; then
+  SNAPCAST_CLIENT_ID="$BALENA_DEVICE_UUID"
+else
+  SNAPCAST_CLIENT_ID="$(hostname | sed -e 's/[^A-Za-z0-9.-]/-/g')"
+fi
+
+if [[ "$MODE" != "MULTI_ROOM" && "$MODE" != "MULTI_ROOM_CLIENT" ]]; then
+  echo "Multi-room client disabled. Exiting..."
+  exit 0
+fi
+
+SNAPCLIENT_PID_FILE=/tmp/snapclient.pid
+
+_spawn_snapclient() {
+  local target="$1"
+  local latency_ms
+  latency_ms="${SOUND_MULTIROOM_LATENCY:-}"
+  if [[ -z "$latency_ms" ]]; then
+    latency_ms=$(curl -sf "$SOUND_SUPERVISOR/multiroom/latency" 2>/dev/null | grep -o '"latencyMs":-*[0-9]*' | cut -d':' -f2 || true)
+  fi
+  latency_ms=${latency_ms:-400}
+  local pa_latency_ms="${SOUND_MULTIROOM_PA_LATENCY_MS:-100}"
+  local latency="--latency ${latency_ms}"
+  echo "[snapclient] Starting → $target ($latency, pulse buffer ${pa_latency_ms}ms, hostID $SNAPCAST_CLIENT_ID)"
+  PULSE_SERVER="tcp:localhost:4317" \
+  PULSE_LATENCY_MSEC="$pa_latency_ms" \
+  /usr/bin/snapclient \
+    --player "pulse:server=tcp:localhost:4317,buffer_time=${pa_latency_ms}" \
+    --host "$target" \
+    $latency \
+    --hostID "$SNAPCAST_CLIENT_ID" \
+    --logfilter '*:error' \
+    >/dev/null &
+  echo $! > "$SNAPCLIENT_PID_FILE"
+}
+
 echo "Starting multi-room client..."
 echo "- balenaSound mode: $MODE"
 echo "- Target snapcast server: $SNAPSERVER"
 
-# Set the snapcast device name for https://github.com/iotsound/iotsound/issues/332
-if [[ -z $SOUND_DEVICE_NAME ]]; then
-    SNAPCAST_CLIENT_ID=$BALENA_DEVICE_UUID
-else
-    # The sed command replaces invalid host name characters with dash
-    SNAPCAST_CLIENT_ID=$(echo $SOUND_DEVICE_NAME | sed -e 's/[^A-Za-z0-9.-]/-/g')
-fi
+_spawn_snapclient "$SNAPSERVER"
 
-# Tell ALSA to use PulseAudio as the default PCM so snapclient can reach pipewire-pulse
-# Start snapclient using the native PulseAudio player (built in at compile time via libpulse-dev).
-# This bypasses ALSA entirely and connects directly to pipewire-pulse.
-# PULSE_SINK=balena-sound.output (set in Dockerfile) routes output to the right PipeWire sink.
-if [[ "$MODE" == "MULTI_ROOM" || "$MODE" == "MULTI_ROOM_CLIENT" ]]; then
-  PULSE_SERVER="tcp:localhost:4317" \
-  PULSE_LATENCY_MSEC=200 \
-  /usr/bin/snapclient \
-    --player pulse \
-    --host $SNAPSERVER \
-    $LATENCY \
-    --hostID $SNAPCAST_CLIENT_ID \
-    --logfilter *:error
-  RC=$?
-  echo "[snapclient] exited with code $RC"
-  exit $RC
-else
-  echo "Multi-room client disabled. Exiting..."
-  exit 0
-fi
+# Watchdog: re-fetch master IP every 5s. If it changes while snapclient is
+# running (e.g. this device just promoted to master), kill and respawn with
+# the new target without restarting the container.
+while true; do
+  sleep 5
+  SNAPCLIENT_PID=$(cat "$SNAPCLIENT_PID_FILE" 2>/dev/null || true)
+  if [[ -z "$SNAPCLIENT_PID" ]] || ! kill -0 "$SNAPCLIENT_PID" 2>/dev/null; then
+    wait "$SNAPCLIENT_PID" 2>/dev/null || true
+    RC=$?
+    echo "[snapclient] exited with code $RC"
+    exit $RC
+  fi
+  NEW_SERVER=$(curl --silent "$SOUND_SUPERVISOR/multiroom/master" 2>/dev/null || true)
+  if [[ -n "$NEW_SERVER" && "$NEW_SERVER" != "$SNAPSERVER" ]]; then
+    echo "[snapclient] Master changed: $SNAPSERVER → $NEW_SERVER. Respawning."
+    kill "$SNAPCLIENT_PID" 2>/dev/null || true
+    wait "$SNAPCLIENT_PID" 2>/dev/null || true
+    SNAPSERVER="$NEW_SERVER"
+    _spawn_snapclient "$SNAPSERVER"
+  fi
+done

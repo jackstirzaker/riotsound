@@ -31,14 +31,27 @@ fi
 if [[ "$MODE" == "MULTI_ROOM" ]]; then
   echo "Starting multi-room server..."
 
-  # Fetch the effective buffer from sound-supervisor.
-  # Returns JSON: {"configured":400,"standalone":150,"effective":150,"mode":"standalone"}
-  # On first start there are no remote clients yet, so effective will be the standalone value.
-  # The monitor will restart this service with the right buffer once a remote client joins.
-  BUFFER_RESPONSE=$(curl --silent "$SOUND_SUPERVISOR/multiroom/buffer" || echo '{"effective":400}')
-  BUFFER_MS=$(echo "$BUFFER_RESPONSE" | sed -n 's/.*"effective":\([0-9]*\).*/\1/p')
-  if [[ -z "$BUFFER_MS" || ! "$BUFFER_MS" =~ ^[0-9]+$ ]]; then BUFFER_MS=400; fi
-  echo "- Snapcast buffer: ${BUFFER_MS}ms"
+  REQUESTED_BUFFER_MS=${SOUND_MULTIROOM_BUFFER_MS:-400}
+  CLIENT_LATENCY_MS=${SOUND_MULTIROOM_LATENCY:-400}
+  if ! [[ "$REQUESTED_BUFFER_MS" =~ ^[0-9]+$ ]]; then
+    echo "[multiroom-server] WARN: invalid SOUND_MULTIROOM_BUFFER_MS '$REQUESTED_BUFFER_MS', falling back to 400ms"
+    REQUESTED_BUFFER_MS=400
+  fi
+  if ! [[ "$CLIENT_LATENCY_MS" =~ ^-?[0-9]+$ ]]; then
+    echo "[multiroom-server] WARN: invalid SOUND_MULTIROOM_LATENCY '$CLIENT_LATENCY_MS', falling back to 400ms"
+    CLIENT_LATENCY_MS=400
+  fi
+
+  MIN_BUFFER_MS=$(( CLIENT_LATENCY_MS + 100 ))
+  if [ "$MIN_BUFFER_MS" -lt 100 ]; then
+    MIN_BUFFER_MS=100
+  fi
+
+  BUFFER_MS="$REQUESTED_BUFFER_MS"
+  if [ "$BUFFER_MS" -lt "$MIN_BUFFER_MS" ]; then
+    BUFFER_MS="$MIN_BUFFER_MS"
+  fi
+  echo "- Snapcast buffer: ${BUFFER_MS}ms (requested ${REQUESTED_BUFFER_MS}ms, minimum ${MIN_BUFFER_MS}ms)"
 
   # Write dynamic snapserver config with the current effective buffer
   cat > /tmp/snapserver.conf << SNAPEOF
@@ -87,7 +100,7 @@ SNAPEOF
       --rate=48000 \
       --channels=2 \
       --raw \
-      --latency-msec=50 \
+      --latency-msec=${SOUND_MULTIROOM_CAPTURE_MS:-50} \
       > "$FIFO" &
     PACAT_PID=$!
     echo "[pacat] Started (PID: $PACAT_PID)"

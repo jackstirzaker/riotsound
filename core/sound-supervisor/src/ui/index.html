@@ -111,23 +111,21 @@
             <div class="col-sm-6">
               <div class="card text-center h-100">
                 <div class="card-body">
-                  <h5 class="card-title">Multi-room buffer</h5>
+                  <h5 class="card-title">Playback latency</h5>
                   <p class="card-text">
-                    Sync buffer when remote clients connect.<br/>
-                    Status: <strong><span id="buffer-mode-text">—</span></strong>
-                    (<span id="buffer-effective-text">—</span>ms active)
+                    Hardware output delay for <em>this</em> device.<br/>
+                    <small class="text-muted">Only applies during multiroom playback.</small>
                   </p>
                   <input
                     type="range"
-                    min="100"
-                    max="1000"
+                    min="-1000"
+                    max="2000"
                     step="50"
                     value="400"
                     class="form-range"
-                    id="buffer-slider"
+                    id="latency-slider"
                   />
-                  <small class="text-muted">Configured: <span id="buffer-configured-text">400</span>ms when clients join</small><br/>
-                  <small class="text-muted">Client latency: <span id="client-latency-text">—</span>ms (<span id="client-latency-role-text">—</span>)</small>
+                  <small class="text-muted">Current: <span id="latency-text">400</span>ms</small>
                 </div>
               </div>
             </div>
@@ -318,42 +316,31 @@
         );
       };
 
-      // Buffer slider
-      var bufferSlider = document.getElementById("buffer-slider");
-      var bufferConfiguredText = document.getElementById("buffer-configured-text");
-      var bufferModeText = document.getElementById("buffer-mode-text");
-      var bufferEffectiveText = document.getElementById("buffer-effective-text");
-      var clientLatencyText = document.getElementById("client-latency-text");
-      var clientLatencyRoleText = document.getElementById("client-latency-role-text");
+      // Latency slider
+      var latencySlider = document.getElementById("latency-slider");
+      var latencyText = document.getElementById("latency-text");
 
-      bufferSlider.oninput = function () {
-        bufferConfiguredText.innerHTML = this.value;
+      latencySlider.oninput = function () {
+        latencyText.innerHTML = this.value;
         var $this = $(this);
         clearTimeout($this.data("timeout"));
         $this.data(
           "timeout",
           setTimeout(async function () {
-            await postAPI("/multiroom/buffer", "bufferMs", parseInt($this.val()));
-            await refreshBuffer();
+            await postAPI("/multiroom/latency", "latencyMs", parseInt($this.val()));
           }, 400)
         );
       };
 
-      async function refreshBuffer() {
-        let buf = await getAPI("/multiroom/buffer");
-        if (buf && typeof buf === "object") {
-          bufferSlider.value = buf.configured;
-          bufferConfiguredText.innerHTML = buf.configured;
-          bufferEffectiveText.innerHTML = buf.effective;
-          bufferModeText.innerHTML = buf.mode === "standalone" ? "Standalone" : "Multi-room";
-          if (buf.clientLatency !== undefined) {
-            clientLatencyText.innerHTML = buf.clientLatency;
-            clientLatencyRoleText.innerHTML = buf.clientLatency === 150 ? "master" : "remote client";
-          }
+      async function refreshLatency() {
+        let lat = await getAPI("/multiroom/latency");
+        if (lat && typeof lat.latencyMs === "number") {
+          latencySlider.value = lat.latencyMs;
+          latencyText.innerHTML = lat.latencyMs;
         }
       }
 
-      setInterval(refreshBuffer, 5000);
+      setInterval(refreshLatency, 10000);
 
       init();
       async function init() {
@@ -365,7 +352,7 @@
 
         await refreshMultiroom();
         await loadKnownGroups();
-        await refreshBuffer();
+        await refreshLatency();
       }
 
       setInterval(refreshMultiroom, 5000);

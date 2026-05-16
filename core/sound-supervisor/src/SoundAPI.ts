@@ -5,7 +5,7 @@ import SoundConfig from './SoundConfig'
 import PulseAudioWrapper from './PulseAudioWrapper'
 import SnapserverMonitor from './SnapserverMonitor'
 import { constants } from './constants'
-import { restartDevice, rebootDevice, shutdownDevice } from './utils'
+import { restartBalenaService, restartDevice, rebootDevice, shutdownDevice } from './utils'
 import { MultiroomRole, SoundModes } from './types'
 import { BalenaSDK } from 'balena-sdk'
 import sdk from './BalenaClient'
@@ -152,34 +152,33 @@ export default class SoundAPI {
       }
     })
 
-    // GET /multiroom/buffer — returns { configured, effective, mode, clientLatency }
-    // multiroom-server/start.sh reads this on every (re)start to know which bufferMs to use.
-    this.api.get('/multiroom/buffer', (_req, res) => {
-      const status = this.monitor
-        ? this.monitor.getStatus()
-        : { configured: constants.multiroomBufferMs, standalone: constants.standaloneBufferMs, effective: constants.standaloneBufferMs, mode: 'standalone' as const }
-      const clientLatency = this.config.isElectedMaster() ? 150 : constants.multiroomClientLatency
-      res.json({ ...status, clientLatency })
+    // GET /multiroom/latency — returns { latencyMs } (SOUND_MULTIROOM_LATENCY per device)
+    this.api.get('/multiroom/latency', (_req, res) => {
+      res.json({ latencyMs: constants.multiroomClientLatency })
     })
 
-    // POST /multiroom/buffer — update the configured multi-room buffer (50–2000ms).
-    // If currently in multi-room mode, triggers a snapserver restart with the new value.
-    this.api.post('/multiroom/buffer', async (req, res) => {
-      const { bufferMs } = req.body
-      if (typeof bufferMs !== 'number' || bufferMs < 50 || bufferMs > 2000) {
-        res.status(400).json({ error: 'bufferMs must be a number between 50 and 2000' })
+    // POST /multiroom/latency — persist SOUND_MULTIROOM_LATENCY; snapclient picks it
+    // up from this API on next respawn. Bounce multiroom-client immediately so
+    // tuning from the UI affects the running Snapcast client instead of waiting
+    // for a future container restart.
+    this.api.post('/multiroom/latency', async (req, res) => {
+      const { latencyMs } = req.body
+      if (typeof latencyMs !== 'number' || latencyMs < -1000 || latencyMs > 2000) {
+        res.status(400).json({ error: 'latencyMs must be a number between -1000 and 2000' })
         return
       }
-      this.monitor?.setConfiguredBuffer(bufferMs)
+      constants.multiroomClientLatency = Math.round(latencyMs)
+      process.env.SOUND_MULTIROOM_LATENCY = String(constants.multiroomClientLatency)
       try {
-        await this.sdk.models.device.envVar.set(process.env.BALENA_DEVICE_UUID!, 'SOUND_MULTIROOM_BUFFER_MS', String(bufferMs))
-        console.log(`SOUND_MULTIROOM_BUFFER_MS persisted: ${bufferMs}`)
+        await this.sdk.models.device.envVar.set(process.env.BALENA_DEVICE_UUID!, 'SOUND_MULTIROOM_LATENCY', String(constants.multiroomClientLatency))
+        console.log(`SOUND_MULTIROOM_LATENCY persisted: ${constants.multiroomClientLatency}`)
       } catch (err) {
-        console.log(`Failed to persist SOUND_MULTIROOM_BUFFER_MS: ${(err as Error).message}`)
+        console.log(`Failed to persist SOUND_MULTIROOM_LATENCY: ${(err as Error).message}`)
       }
-      const status = this.monitor?.getStatus() ?? { configured: bufferMs, standalone: constants.standaloneBufferMs, effective: constants.standaloneBufferMs, mode: 'standalone' as const }
-      const clientLatency = this.config.isElectedMaster() ? 150 : constants.multiroomClientLatency
-      res.json({ ...status, clientLatency })
+      restartBalenaService('multiroom-client').catch((err: Error) =>
+        console.log(`Failed to restart multiroom-client after latency change: ${err.message}`)
+      )
+      res.json({ latencyMs: constants.multiroomClientLatency, restarting: true })
     })
 
     // --- Internal (WirePlumber → supervisor events) ---
