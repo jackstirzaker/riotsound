@@ -23,6 +23,11 @@ function isUsableResolution(iface: string, address: string): boolean {
   if (address === '127.0.0.1') return false
   // Link-local
   if (address.startsWith('169.254.')) return false
+  // Balena/Docker host-only networks. avahi-browse can resolve the same
+  // service through wlan0 while still reporting a bridge/gateway address.
+  if (address.startsWith('172.17.')) return false
+  if (address.startsWith('10.114.')) return false
+  if (address.startsWith('10.244.') || address.startsWith('10.245.')) return false
   // Docker / container virtual interfaces (br-xxx, docker0, veth*)
   if (iface.startsWith('br-') || iface.startsWith('docker') || iface.startsWith('veth')) return false
   return true
